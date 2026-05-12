@@ -36,6 +36,12 @@ modes:
       - raspotify.service
       - bluealsa.service
 
+# After changing default ALSA device (web UI), restart these if active so sinks reopen ALSA.
+alsa_restart_units:
+  - shairport-sync.service
+  - raspotify.service
+  - bluealsa.service
+
 # Units shown in the dashboard (status + logs), in display order.
 dashboard_units:
   - shairport-sync.service

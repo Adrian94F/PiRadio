@@ -30,6 +30,7 @@ fi
 
 apt-get install -y --no-install-recommends \
   python3 python3-venv python3-pip \
+  alsa-utils \
   avahi-daemon \
   "${BT_PKG}" \
   bluez \

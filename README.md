@@ -16,8 +16,13 @@ Configuration:
 
 - **Modes and unit names:** `/etc/pi-audio-controller/modes.yaml` (installed once; edit to match your distro, e.g. `bluealsa@hci0.service` instead of `bluealsa.service`).
 - **Last selected mode (for the UI):** `/var/lib/pi-audio-controller/current-mode`.
+- **Default ALSA output (USB or built-in):** chosen in the web UI; written to **`/etc/asound.conf`** (previous file backed up to **`asound.conf.bak.pi-audio-*`** if it was not already managed) and saved under **`/var/lib/pi-audio-controller/audio-output.json`**. Services listed in **`alsa_restart_units`** in `modes.yaml` are restarted when they are active.
 - **Raspotify:** `/etc/default/raspotify`.
 - **Shairport Sync:** `/etc/shairport-sync.conf`.
+
+Requires **`alsa-utils`** (`aplay`) for device listing; the setup script installs it.
+
+If a program ignores ALSA defaults, set its device explicitly (e.g. **`OPTIONS` / `--device`** in Raspotify, **`alsa` section** in shairport-sync) to **`hw:CARD,DEV`** matching your selection.
 
 ## Bluetooth notes
 

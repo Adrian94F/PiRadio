@@ -5,10 +5,24 @@
   const logUnit = document.getElementById("log-unit");
   const logConnect = document.getElementById("log-connect");
   const logOutput = document.getElementById("log-output");
+  const audioSelect = document.getElementById("audio-select");
+  const audioApply = document.getElementById("audio-apply");
+  const audioMeta = document.getElementById("audio-meta");
+  const audioError = document.getElementById("audio-error");
 
   let config = { modes: {}, dashboard_units: [] };
   let statusTimer = null;
   let logWs = null;
+
+  function setAudioError(msg) {
+    if (!msg) {
+      audioError.hidden = true;
+      audioError.textContent = "";
+      return;
+    }
+    audioError.hidden = false;
+    audioError.textContent = msg;
+  }
 
   function setModeError(msg) {
     if (!msg) {
@@ -78,10 +92,55 @@
     });
   }
 
+  function renderAudio(audio) {
+    if (!audio) return;
+    const outputs = audio.outputs || [];
+    const current = audio.current || null;
+    const prev = audioSelect.value;
+
+    audioSelect.innerHTML = "";
+    if (!outputs.length) {
+      const o = document.createElement("option");
+      o.value = "";
+      o.textContent = "No playback devices (install alsa-utils, check USB)";
+      audioSelect.appendChild(o);
+      audioSelect.disabled = true;
+      audioApply.disabled = true;
+    } else {
+      audioSelect.disabled = false;
+      audioApply.disabled = false;
+      outputs.forEach((o) => {
+        const opt = document.createElement("option");
+        opt.value = o.id;
+        opt.textContent = o.label;
+        audioSelect.appendChild(opt);
+      });
+      const want =
+        (current && current.id) ||
+        (prev && outputs.some((x) => x.id === prev) ? prev : outputs[0].id);
+      if (want && [...audioSelect.options].some((o) => o.value === want)) {
+        audioSelect.value = want;
+      }
+    }
+
+    let meta = "";
+    if (current && current.id) {
+      meta = `Selected: ${current.label || current.id}`;
+      if (current.missing) {
+        meta += " — device not found now (unplugged?).";
+      }
+    } else {
+      meta = "No selection saved yet; choose a device and click Apply.";
+    }
+    audioMeta.textContent = meta;
+  }
+
   function renderStatus(data) {
     statusGrid.innerHTML = "";
     const units = data.units || {};
     if (data.mode) syncModeRadio(data.mode);
+
+    renderAudio(data.audio);
 
     Object.keys(units).forEach((u) => {
       const row = document.createElement("div");
@@ -165,6 +224,28 @@
 
   logConnect.addEventListener("click", () => {
     startLogs();
+  });
+
+  audioApply.addEventListener("click", async () => {
+    const id = audioSelect.value;
+    if (!id) return;
+    setAudioError("");
+    try {
+      const res = await fetchJson("/api/audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const rr = (res.restarted || []).filter(Boolean);
+      if (rr.length) {
+        audioMeta.textContent = `Applied ${res.label || id}. Restarted: ${rr.join(", ")}`;
+      } else {
+        audioMeta.textContent = `Applied ${res.label || id}.`;
+      }
+      await refreshStatus();
+    } catch (e) {
+      setAudioError(String(e.message || e));
+    }
   });
 
   loadConfig()

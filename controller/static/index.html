@@ -20,6 +20,18 @@
     </section>
 
     <section class="card">
+      <h2>Audio output</h2>
+      <p class="hint">Sets ALSA default device (<code>pcm.!default</code> in <code>/etc/asound.conf</code>) for shairport-sync, raspotify, and BlueALSA. Active sinks are restarted.</p>
+      <label class="row">
+        <span>Device</span>
+        <select id="audio-select"></select>
+        <button type="button" id="audio-apply">Apply</button>
+      </label>
+      <p id="audio-meta" class="meta"></p>
+      <p id="audio-error" class="error" hidden></p>
+    </section>
+
+    <section class="card">
       <h2>Service status</h2>
       <div id="status-grid" class="status-grid"></div>
     </section>
