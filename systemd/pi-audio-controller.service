@@ -1,0 +1,18 @@
+[Unit]
+Description=Pi Audio Controller (web UI for AirPlay / Spotify / Bluetooth modes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PI_AUDIO_CONFIG=/etc/pi-audio-controller
+WorkingDirectory=/opt/pi-audio-controller
+ExecStart=/opt/pi-audio-controller/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8765
+Restart=on-failure
+RestartSec=3
+
+# Needs permission to start/stop audio units and read journals for those units.
+User=root
+
+[Install]
+WantedBy=multi-user.target

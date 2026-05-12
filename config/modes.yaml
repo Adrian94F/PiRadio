@@ -1,0 +1,43 @@
+# Maps UI modes to systemd units that must be running vs stopped.
+# Adjust unit names to match your distro (e.g. bluealsa vs bluealsa@hci0).
+
+modes:
+  airplay:
+    description: "AirPlay 2 via shairport-sync"
+    start:
+      - shairport-sync.service
+    stop:
+      - raspotify.service
+      - bluealsa.service
+
+  spotify:
+    description: "Spotify Connect via raspotify (librespot)"
+    start:
+      - raspotify.service
+    stop:
+      - shairport-sync.service
+      - bluealsa.service
+
+  bluetooth:
+    description: "Bluetooth A2DP speaker (BlueALSA)"
+    start:
+      - bluetooth.service
+      - bluealsa.service
+    stop:
+      - shairport-sync.service
+      - raspotify.service
+
+  off:
+    description: "All audio sinks stopped"
+    start: []
+    stop:
+      - shairport-sync.service
+      - raspotify.service
+      - bluealsa.service
+
+# Units shown in the dashboard (status + logs), in display order.
+dashboard_units:
+  - shairport-sync.service
+  - raspotify.service
+  - bluetooth.service
+  - bluealsa.service

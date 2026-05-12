@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pi Audio Controller</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Pi Audio Controller</h1>
+      <p class="sub">Modes switch systemd units (AirPlay, Spotify Connect, Bluetooth sink).</p>
+    </header>
+
+    <section class="card">
+      <h2>Mode</h2>
+      <div id="mode-radios" class="modes"></div>
+      <p id="mode-error" class="error" hidden></p>
+    </section>
+
+    <section class="card">
+      <h2>Service status</h2>
+      <div id="status-grid" class="status-grid"></div>
+    </section>
+
+    <section class="card">
+      <h2>Live logs</h2>
+      <label class="row">
+        <span>Unit</span>
+        <select id="log-unit"></select>
+        <button type="button" id="log-connect">Connect</button>
+      </label>
+      <pre id="log-output" class="log"></pre>
+    </section>
+  </div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
