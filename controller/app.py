@@ -50,11 +50,28 @@ APLAY_LINE = re.compile(
     r"^card\s+(\d+):\s*(.+?),\s*device\s+(\d+):\s*(.+)$"
 )
 
+BT_CONTROLLER = re.compile(r"^Controller\s+([0-9A-Fa-f:]+)", re.I)
+BT_DEVICE_LINE = re.compile(r"^Device\s+([0-9A-Fa-f:]{17})\s+(.*)$")
+
 app = FastAPI(title="Pi Audio Controller")
 
 
 class AudioSelectBody(BaseModel):
     id: str = Field(..., description='ALSA id from aplay -l, e.g. "1,0" for card 1 device 0')
+
+
+class BluetoothAliasBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=248)
+
+
+class BluetoothDiscoverableBody(BaseModel):
+    enabled: bool = True
+    minutes: float | None = Field(
+        default=5,
+        ge=0,
+        le=60,
+        description="Discoverable window in minutes; 0 lets the stack use its default timeout.",
+    )
 
 
 def _config_path(name: str) -> Path:
@@ -270,6 +287,166 @@ def audio_status() -> dict[str, Any]:
     return {"outputs": outputs, "current": current}
 
 
+def _bluetoothctl(commands: list[str]) -> tuple[int, str]:
+    exe = shutil.which("bluetoothctl")
+    if not exe:
+        return -1, ""
+    script = "\n".join(commands + ["quit"]) + "\n"
+    proc = subprocess.run(
+        [exe],
+        input=script,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    out = (proc.stdout or "") + "\n" + (proc.stderr or "")
+    return proc.returncode, out
+
+
+def _parse_bt_device_lines(text: str) -> list[dict[str, str]]:
+    found: list[dict[str, str]] = []
+    for line in text.splitlines():
+        line = line.strip()
+        m = BT_DEVICE_LINE.match(line)
+        if m:
+            addr, rest = m.group(1), m.group(2).strip()
+            found.append({"address": addr.upper(), "name": rest or "(unknown)"})
+    return found
+
+
+def _parse_bt_show(text: str) -> dict[str, Any]:
+    adapter: dict[str, Any] = {
+        "address": "",
+        "name": "",
+        "alias": "",
+        "powered": None,
+        "discoverable": False,
+        "pairable": False,
+    }
+    for line in text.splitlines():
+        line = line.strip()
+        m = BT_CONTROLLER.match(line)
+        if m:
+            adapter["address"] = m.group(1).upper()
+            continue
+        if line.startswith("Name:"):
+            adapter["name"] = line.split(":", 1)[1].strip()
+        elif line.startswith("Alias:"):
+            adapter["alias"] = line.split(":", 1)[1].strip()
+        elif line.startswith("Powered:"):
+            adapter["powered"] = "yes" in line.lower()
+        elif line.startswith("Discoverable:"):
+            adapter["discoverable"] = "yes" in line.lower()
+        elif line.startswith("Pairable:"):
+            adapter["pairable"] = "yes" in line.lower()
+    return adapter
+
+
+def _rfkill_unblock_bluetooth() -> None:
+    exe = shutil.which("rfkill")
+    if not exe:
+        return
+    subprocess.run(
+        [exe, "unblock", "bluetooth"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+
+def _rfkill_bluetooth_blocked() -> bool:
+    """True if rfkill reports Bluetooth hci soft- or hard-blocked."""
+    exe = shutil.which("rfkill")
+    if not exe:
+        return False
+    proc = subprocess.run(
+        [exe, "list"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    out = proc.stdout or ""
+    chunks = re.split(r"\n(?=\d+:)", out)
+    for ch in chunks:
+        if not re.search(r"Bluetooth", ch, re.I):
+            continue
+        if re.search(r"Soft blocked:\s*yes", ch, re.I):
+            return True
+        if re.search(r"Hard blocked:\s*yes", ch, re.I):
+            return True
+    return False
+
+
+def _connected_fallback(all_devices: list[dict[str, str]]) -> list[dict[str, str]]:
+    connected: list[dict[str, str]] = []
+    for d in all_devices:
+        addr = d["address"]
+        _, inf = _bluetoothctl([f"info {addr}"])
+        if "Connected: yes" in inf:
+            connected.append(d)
+    return connected
+
+
+def bluetooth_status() -> dict[str, Any]:
+    if not shutil.which("bluetoothctl"):
+        return {
+            "available": False,
+            "error": "bluetoothctl not found (install bluez)",
+            "rfkill_blocked": False,
+            "adapter_ready": False,
+            "adapter": {},
+            "paired": [],
+            "connected": [],
+        }
+
+    code, show_out = _bluetoothctl(["show"])
+    if code != 0 and "Controller" not in show_out:
+        return {
+            "available": False,
+            "error": (show_out or "bluetooth adapter unavailable").strip()[:500],
+            "rfkill_blocked": _rfkill_bluetooth_blocked(),
+            "adapter_ready": False,
+            "adapter": {},
+            "paired": [],
+            "connected": [],
+        }
+
+    adapter = _parse_bt_show(show_out)
+
+    _, paired_out = _bluetoothctl(["paired-devices"])
+    paired = _parse_bt_device_lines(paired_out)
+
+    code_c, conn_out = _bluetoothctl(["devices Connected"])
+    connected = _parse_bt_device_lines(conn_out)
+    bad_conn = code_c != 0 or re.search(
+        r"(?i)\b(invalid|unknown command)\b",
+        conn_out,
+    )
+    if bad_conn:
+        _, all_out = _bluetoothctl(["devices"])
+        all_dev = _parse_bt_device_lines(all_out)
+        connected = _connected_fallback(all_dev) if all_dev else []
+
+    name_map = {p["address"]: p["name"] for p in paired}
+    for c in connected:
+        if c["name"] == "(unknown)" or not c["name"]:
+            c["name"] = name_map.get(c["address"], c["name"])
+
+    rfkill_blocked = _rfkill_bluetooth_blocked()
+    powered_ok = adapter.get("powered") is True
+    adapter_ready = powered_ok and not rfkill_blocked
+
+    return {
+        "available": True,
+        "error": None,
+        "rfkill_blocked": rfkill_blocked,
+        "adapter_ready": adapter_ready,
+        "adapter": adapter,
+        "paired": paired,
+        "connected": connected,
+    }
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -296,6 +473,7 @@ def get_status() -> dict[str, Any]:
         "mode": read_last_mode_valid(),
         "units": {u: {"active": unit_active(u)} for u in units},
         "audio": audio_status(),
+        "bluetooth": bluetooth_status(),
     }
 
 
@@ -325,6 +503,60 @@ def post_mode(mode: str) -> dict[str, str]:
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
     return {"mode": mode, "ok": "true"}
+
+
+@app.post("/api/bluetooth/alias")
+def post_bluetooth_alias(body: BluetoothAliasBody) -> dict[str, Any]:
+    if not shutil.which("bluetoothctl"):
+        raise HTTPException(status_code=503, detail="bluetoothctl not available")
+    name = re.sub(r"[\x00-\x1f]", "", body.name.strip())
+    if not name:
+        raise HTTPException(status_code=400, detail="empty name")
+    code, out = _bluetoothctl([f"system-alias {name}"])
+    if code != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=(out or "system-alias failed; old BlueZ may need /etc/bluetooth/main.conf Name=")[-500:],
+        )
+    return {"ok": True, "bluetooth": bluetooth_status()}
+
+
+def _ensure_bluetooth_adapter_on() -> None:
+    """Unblock rfkill (if needed) and power on controller — safe to call repeatedly."""
+    _rfkill_unblock_bluetooth()
+    code, out = _bluetoothctl(["power on"])
+    if code != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=(out or "bluetoothctl power on failed — check bluetooth.service and hci0")[-500:],
+        )
+
+
+@app.post("/api/bluetooth/enable")
+def post_bluetooth_enable() -> dict[str, Any]:
+    """Unblock rfkill (soft block) and turn the adapter on (`power on`)."""
+    if not shutil.which("bluetoothctl"):
+        raise HTTPException(status_code=503, detail="bluetoothctl not available")
+    _ensure_bluetooth_adapter_on()
+    return {"ok": True, "bluetooth": bluetooth_status()}
+
+
+@app.post("/api/bluetooth/discoverable")
+def post_bluetooth_discoverable(body: BluetoothDiscoverableBody) -> dict[str, Any]:
+    if not shutil.which("bluetoothctl"):
+        raise HTTPException(status_code=503, detail="bluetoothctl not available")
+    if body.enabled:
+        _rfkill_unblock_bluetooth()
+        cmds = ["power on", "pairable on"]
+        if body.minutes is not None and body.minutes > 0:
+            cmds.append(f"discoverable-timeout {int(body.minutes * 60)}")
+        cmds.append("discoverable on")
+    else:
+        cmds = ["discoverable off"]
+    code, out = _bluetoothctl(cmds)
+    if code != 0:
+        raise HTTPException(status_code=500, detail=(out or "bluetoothctl failed")[-400:])
+    return {"ok": True, "bluetooth": bluetooth_status()}
 
 
 async def _journal_lines(unit: str) -> asyncio.subprocess.Process:

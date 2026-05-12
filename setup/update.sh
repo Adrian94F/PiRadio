@@ -36,6 +36,13 @@ if [[ "${EUID:-0}" -ne 0 ]]; then
   exit 1
 fi
 
+if ! command -v expect &>/dev/null; then
+  export DEBIAN_FRONTEND=noninteractive
+  log "Installing expect (needed for Bluetooth pairing agent)…"
+  apt-get update -qq
+  apt-get install -y --no-install-recommends expect
+fi
+
 cd "${REPO_ROOT}"
 
 if [[ "${DO_PULL}" -eq 1 ]]; then
@@ -49,9 +56,11 @@ fi
 
 log "Deploying app to ${INSTALL_ROOT}…"
 mkdir -p "${INSTALL_ROOT}/static"
+mkdir -p "${INSTALL_ROOT}/scripts"
 install -m 0644 "${REPO_ROOT}/controller/app.py" "${INSTALL_ROOT}/app.py"
 install -m 0644 "${REPO_ROOT}/controller/requirements.txt" "${INSTALL_ROOT}/requirements.txt"
 cp -a "${REPO_ROOT}/controller/static/." "${INSTALL_ROOT}/static/"
+install -m 0644 "${REPO_ROOT}/scripts/bt-default-agent.expect" "${INSTALL_ROOT}/scripts/bt-default-agent.expect"
 
 if [[ ! -d "${INSTALL_ROOT}/venv" ]]; then
   log "No venv at ${INSTALL_ROOT}/venv — creating…"
@@ -74,9 +83,12 @@ else
   log "Leaving existing ${CONFIG_DIR}/modes.yaml unchanged."
 fi
 
-log "Refreshing systemd unit…"
+log "Refreshing systemd units…"
+install -m 0644 "${REPO_ROOT}/systemd/pi-bluetooth-agent.service" /etc/systemd/system/pi-bluetooth-agent.service
 install -m 0644 "${REPO_ROOT}/systemd/pi-audio-controller.service" /etc/systemd/system/pi-audio-controller.service
 systemctl daemon-reload
+systemctl enable pi-bluetooth-agent.service 2>/dev/null || true
+systemctl restart pi-bluetooth-agent.service 2>/dev/null || true
 systemctl restart pi-audio-controller.service
 
 if systemctl is-active --quiet pi-audio-controller.service; then

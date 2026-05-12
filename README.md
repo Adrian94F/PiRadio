@@ -44,11 +44,36 @@ If a program ignores ALSA defaults, set its device explicitly (e.g. **`OPTIONS` 
 
 ## Bluetooth notes
 
-1. Pair your phone from the Pi once (e.g. `bluetoothctl`, `scan on`, `pair`, `trust`, `connect`).
-2. In the web UI, choose mode **bluetooth** so competing sinks (AirPlay / Spotify) are stopped.
-3. If audio routing fails, ensure BlueALSA is the ALSA/Pulse device your stack expects; unit names vary between Bookworm and older images—update `modes.yaml` accordingly (`systemctl list-units '*bluealsa*'` helps).
+The **Settings** tab shows the adapter **friendly name**, **paired devices**, **currently connected** client(s), and controls to **make the Pi discoverable** for pairing (`bluetoothctl discoverable` / `pairable`). The controller runs as root so it can drive **`bluetoothctl`** and **`rfkill unblock bluetooth`**; **`bluez`** must be installed.
+
+If the adapter is **off** or **rfkill-blocked**, the UI shows **Enable Bluetooth** (`POST /api/bluetooth/enable`: **`rfkill unblock bluetooth`** then **`power on`**). **Make discoverable** also unblocks rfkill and powers on before advertising.
+
+1. Set the **device name** and tap **Save** (uses `system-alias`; very old BlueZ may require **`Name=`** in **`/etc/bluetooth/main.conf`** instead).
+2. Tap **Make discoverable for pairing**, then pair from the phone’s Bluetooth settings.
+3. Choose mode **bluetooth** on the **Mode** tab so competing sinks (AirPlay / Spotify) are stopped while using BT audio.
+4. If audio routing fails, ensure BlueALSA matches your stack; update **`modes.yaml`** unit names if needed (`systemctl list-units '*bluealsa*'`).
 
 If `apt` reports **`Package 'bluealsa' has no installation candidate`**, install **`bluez-alsa-utils`** instead (the setup script does this automatically).
+
+### Phone shows “Pairing unsuccessful” / cannot complete pairing
+
+Discovery only shows the Pi; **pairing** needs a **Bluetooth agent** on the Pi to accept the phone’s request. Headless systems often had none running.
+
+- **Install/update** this project so **`pi-bluetooth-agent.service`** is present and **active** (uses `expect` + `bluetoothctl` to register a **NoInputNoOutput** agent):
+
+  ```bash
+  systemctl status pi-bluetooth-agent
+  sudo systemctl enable --now pi-bluetooth-agent
+  journalctl -u pi-bluetooth-agent -b --no-pager
+  ```
+
+  Fresh **`setup/install.sh`** and **`setup/update.sh`** install **`expect`**, deploy **`/opt/pi-audio-controller/scripts/bt-default-agent.expect`**, and enable the unit.
+
+- **Clear stale pairings**: on the phone, **Forget** “raspberry”; on the Pi run **`bluetoothctl remove XX:XX:XX:XX:XX:XX`** for that device (get MAC from **`bluetoothctl devices`**).
+
+- In the web UI: **Enable Bluetooth** → **Make discoverable** → start pairing on the **phone within the discoverable window** (often a few minutes).
+
+- Optional: in **`/etc/bluetooth/main.conf`** under **`[General]`** add **`JustWorksRepairing = always`**, then **`sudo systemctl restart bluetooth`**, then restart **`pi-bluetooth-agent`**.
 
 ## Development
 

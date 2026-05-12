@@ -32,6 +32,7 @@ apt-get install -y --no-install-recommends \
   python3 python3-venv python3-pip \
   alsa-utils \
   avahi-daemon \
+  expect \
   "${BT_PKG}" \
   bluez \
   shairport-sync \
@@ -64,9 +65,16 @@ else
   log "Keeping existing ${CONFIG_DIR}/modes.yaml."
 fi
 
-log "Installing systemd unit…"
+log "Installing Bluetooth pairing agent (required for phone pairing)…"
+mkdir -p "${INSTALL_ROOT}/scripts"
+install -m 0644 "${REPO_ROOT}/scripts/bt-default-agent.expect" "${INSTALL_ROOT}/scripts/bt-default-agent.expect"
+install -m 0644 "${REPO_ROOT}/systemd/pi-bluetooth-agent.service" /etc/systemd/system/pi-bluetooth-agent.service
+
+log "Installing systemd units…"
 install -m 0644 "${REPO_ROOT}/systemd/pi-audio-controller.service" /etc/systemd/system/pi-audio-controller.service
 systemctl daemon-reload
+systemctl enable pi-bluetooth-agent.service
+systemctl restart pi-bluetooth-agent.service
 systemctl enable pi-audio-controller.service
 systemctl restart pi-audio-controller.service
 

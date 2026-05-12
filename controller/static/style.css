@@ -290,6 +290,140 @@ body {
   line-height: 1.45;
 }
 
+.settings-card--bt {
+  margin-top: 1rem;
+}
+
+.settings-subhead {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+#bt-connected {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bt-block {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+.bt-block--empty {
+  color: var(--muted);
+}
+
+.bt-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bt-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  margin-bottom: 0.5rem;
+}
+
+.bt-list li:last-child {
+  margin-bottom: 0;
+}
+
+.bt-list__name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.bt-list__mac {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.bt-connected-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.bt-connected-card .bt-list__name {
+  color: var(--ok);
+}
+
+.bt-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+@media (min-width: 480px) {
+  .bt-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .bt-actions .btn--lg {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.btn--secondary {
+  background: transparent;
+  color: var(--text);
+  border: 2px solid var(--border);
+}
+
+.btn--secondary:hover:not(:disabled) {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.btn--secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.banner--warn {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #fde68a;
+}
+
+.bt-power-callout {
+  padding: 1rem 1.15rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.bt-power-callout__msg {
+  margin: 0 0 0.85rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #fef3c7;
+}
+
+.bt-power-callout .btn {
+  width: 100%;
+}
+
 /* Form controls */
 .field {
   display: flex;

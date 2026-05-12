@@ -2,7 +2,7 @@
   const PAGE_SUBTITLE = {
     mode: "Choose playback mode",
     status: "Services & journal stream",
-    settings: "Audio output device",
+    settings: "Audio & Bluetooth",
   };
 
   const ROUTES = ["mode", "status", "settings"];
@@ -18,6 +18,19 @@
   const audioApply = document.getElementById("audio-apply");
   const audioMeta = document.getElementById("audio-meta");
   const audioError = document.getElementById("audio-error");
+  const btUnavailable = document.getElementById("bt-unavailable");
+  const btAlias = document.getElementById("bt-alias");
+  const btSaveAlias = document.getElementById("bt-save-alias");
+  const btAdapterMeta = document.getElementById("bt-adapter-meta");
+  const btConnected = document.getElementById("bt-connected");
+  const btPaired = document.getElementById("bt-paired");
+  const btPairStart = document.getElementById("bt-pair-start");
+  const btPairStop = document.getElementById("bt-pair-stop");
+  const btPairHint = document.getElementById("bt-pair-hint");
+  const btError = document.getElementById("bt-error");
+  const btAdapterOff = document.getElementById("bt-adapter-off");
+  const btAdapterOffMsg = document.getElementById("bt-adapter-off-msg");
+  const btEnable = document.getElementById("bt-enable");
 
   let config = { modes: {}, dashboard_units: [] };
   let statusTimer = null;
@@ -31,6 +44,16 @@
     }
     audioError.hidden = false;
     audioError.textContent = msg;
+  }
+
+  function setBtError(msg) {
+    if (!msg) {
+      btError.hidden = true;
+      btError.textContent = "";
+      return;
+    }
+    btError.hidden = false;
+    btError.textContent = msg;
   }
 
   function setModeError(msg) {
@@ -185,12 +208,137 @@
     audioMeta.textContent = meta;
   }
 
+  function renderBluetooth(bt) {
+    if (!btUnavailable || !btAlias) return;
+
+    if (!bt || !bt.available) {
+      btUnavailable.hidden = false;
+      btUnavailable.textContent =
+        bt && bt.error ? bt.error : "Bluetooth stack unavailable.";
+      btAlias.disabled = true;
+      btSaveAlias.disabled = true;
+      btPairStart.disabled = true;
+      btPairStop.disabled = true;
+      btConnected.innerHTML = "";
+      btPaired.innerHTML = "";
+      btAdapterMeta.textContent = "";
+      btPairHint.textContent = "";
+      if (btAdapterOff) btAdapterOff.hidden = true;
+      return;
+    }
+
+    btUnavailable.hidden = true;
+
+    const ad = bt.adapter || {};
+    const ready = bt.adapter_ready === true;
+
+    if (btAdapterOff && btAdapterOffMsg) {
+      if (!ready) {
+        btAdapterOff.hidden = false;
+        if (bt.rfkill_blocked) {
+          btAdapterOffMsg.textContent =
+            "Bluetooth is disabled (rfkill blocked—often after reboot or flight mode). Tap Enable to unblock and power the adapter.";
+        } else if (ad.powered === false) {
+          btAdapterOffMsg.textContent =
+            "The Bluetooth adapter is powered off. Tap Enable to turn it on.";
+        } else {
+          btAdapterOffMsg.textContent =
+            "Bluetooth is not ready yet. Tap Enable to unblock rfkill (if needed) and power on.";
+        }
+      } else {
+        btAdapterOff.hidden = true;
+      }
+    }
+
+    btAlias.disabled = !ready;
+    btSaveAlias.disabled = !ready;
+    btPairStart.disabled = !ready;
+
+    if (document.activeElement !== btAlias) {
+      btAlias.value = ad.alias || ad.name || "";
+    }
+
+    const mac = ad.address || "";
+    let metaLine = "";
+    if (mac) {
+      metaLine = `Adapter ${mac}`;
+      if (!ready) {
+        metaLine += bt.rfkill_blocked ? " · blocked" : "";
+        metaLine += ad.powered === false ? " · powered off" : "";
+        metaLine += ad.powered == null ? " · state unknown" : "";
+      } else if (ad.pairable === false) {
+        metaLine += " · not pairable";
+      }
+    }
+    btAdapterMeta.textContent = metaLine;
+
+    const conn = bt.connected || [];
+    btConnected.innerHTML = "";
+    if (!conn.length) {
+      const empty = document.createElement("div");
+      empty.className = "bt-block bt-block--empty";
+      empty.textContent = "No device connected.";
+      btConnected.appendChild(empty);
+    } else {
+      conn.forEach((d) => {
+        const wrap = document.createElement("div");
+        wrap.className = "bt-block bt-connected-card";
+        const name = document.createElement("span");
+        name.className = "bt-list__name";
+        name.textContent = d.name || "(unknown)";
+        const macEl = document.createElement("span");
+        macEl.className = "bt-list__mac";
+        macEl.textContent = d.address || "";
+        wrap.appendChild(name);
+        wrap.appendChild(macEl);
+        btConnected.appendChild(wrap);
+      });
+    }
+
+    const paired = bt.paired || [];
+    btPaired.innerHTML = "";
+    if (!paired.length) {
+      const li = document.createElement("li");
+      li.className = "bt-block--empty";
+      li.style.border = "none";
+      li.style.background = "transparent";
+      li.style.padding = "0.5rem 0";
+      li.textContent = "No paired devices yet. Use pairing mode above.";
+      btPaired.appendChild(li);
+    } else {
+      paired.forEach((d) => {
+        const li = document.createElement("li");
+        const name = document.createElement("span");
+        name.className = "bt-list__name";
+        name.textContent = d.name || "(unknown)";
+        const macEl = document.createElement("span");
+        macEl.className = "bt-list__mac";
+        macEl.textContent = d.address || "";
+        li.appendChild(name);
+        li.appendChild(macEl);
+        btPaired.appendChild(li);
+      });
+    }
+
+    const disc = !!ad.discoverable;
+    btPairStop.disabled = !ready || !disc;
+    if (!ready) {
+      btPairHint.textContent = "Enable Bluetooth above, then use pairing.";
+    } else {
+      btPairHint.textContent = disc
+        ? "Adapter is visible — pair from your phone’s Bluetooth settings."
+        : "Tap to advertise this Pi so new devices can discover it.";
+    }
+  }
+
   function renderStatus(data) {
     statusGrid.innerHTML = "";
     const units = data.units || {};
     if (data.mode) highlightMode(data.mode);
 
     renderAudio(data.audio);
+
+    renderBluetooth(data.bluetooth);
 
     Object.keys(units).forEach((u) => {
       const row = document.createElement("div");
@@ -274,6 +422,65 @@
 
   logConnect.addEventListener("click", () => {
     startLogs();
+  });
+
+  if (btEnable) {
+    btEnable.addEventListener("click", async () => {
+      setBtError("");
+      try {
+        await fetchJson("/api/bluetooth/enable", { method: "POST" });
+        await refreshStatus();
+      } catch (e) {
+        setBtError(String(e.message || e));
+      }
+    });
+  }
+
+  btSaveAlias.addEventListener("click", async () => {
+    const name = (btAlias.value || "").trim();
+    if (!name) {
+      setBtError("Enter a device name.");
+      return;
+    }
+    setBtError("");
+    try {
+      await fetchJson("/api/bluetooth/alias", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      await refreshStatus();
+    } catch (e) {
+      setBtError(String(e.message || e));
+    }
+  });
+
+  btPairStart.addEventListener("click", async () => {
+    setBtError("");
+    try {
+      await fetchJson("/api/bluetooth/discoverable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: true, minutes: 5 }),
+      });
+      await refreshStatus();
+    } catch (e) {
+      setBtError(String(e.message || e));
+    }
+  });
+
+  btPairStop.addEventListener("click", async () => {
+    setBtError("");
+    try {
+      await fetchJson("/api/bluetooth/discoverable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: false }),
+      });
+      await refreshStatus();
+    } catch (e) {
+      setBtError(String(e.message || e));
+    }
   });
 
   audioApply.addEventListener("click", async () => {
