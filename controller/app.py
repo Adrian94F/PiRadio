@@ -55,6 +55,46 @@ BT_DEVICE_LINE = re.compile(r"^Device\s+([0-9A-Fa-f:]{17})\s+(.*)$")
 
 app = FastAPI(title="Pi Audio Controller")
 
+_mode_monitor_task: asyncio.Task | None = None
+
+
+async def _auto_mode_loop() -> None:
+    """Background task: detect active audio source and auto-switch mode."""
+    while True:
+        await asyncio.sleep(5)
+        try:
+            detected = await asyncio.get_event_loop().run_in_executor(
+                None, detect_active_mode,
+            )
+            if detected is None:
+                continue
+            current = read_last_mode_valid()
+            if detected != current:
+                # Current mode inactive, another has a stream → switch.
+                try:
+                    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+                    STATE_FILE.write_text(detected + "\n", encoding="utf-8")
+                except OSError:
+                    pass
+        except Exception:
+            pass
+
+
+@app.on_event("startup")
+async def _start_mode_monitor() -> None:
+    global _mode_monitor_task
+    _mode_monitor_task = asyncio.create_task(_auto_mode_loop())
+
+
+@app.on_event("shutdown")
+async def _stop_mode_monitor() -> None:
+    if _mode_monitor_task:
+        _mode_monitor_task.cancel()
+        try:
+            await _mode_monitor_task
+        except asyncio.CancelledError:
+            pass
+
 
 class AudioSelectBody(BaseModel):
     id: str = Field(..., description='ALSA id from aplay -l, e.g. "1,0" for card 1 device 0')
@@ -161,6 +201,78 @@ def read_last_mode_valid() -> str | None:
     return m if m in modes else None
 
 
+# ---------------------------------------------------------------------------
+# Stream detection — checks whether each mode is actively streaming
+# ---------------------------------------------------------------------------
+
+def _check_process_connections(process_name: str) -> bool:
+    """True if *process_name* has ESTABLISHED TCP connections (client streaming)."""
+    ss = shutil.which("ss")
+    if not ss:
+        return False
+    try:
+        proc = subprocess.run(
+            [ss, "-tnpH", "state", "established"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return process_name in (proc.stdout or "")
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def _check_bt_audio_connected() -> bool:
+    """True if any Bluetooth device is connected (A2DP likely active)."""
+    code, out = _bluetoothctl(["devices Connected"])
+    if code != 0 or "Invalid" in out:
+        # Fallback for old BlueZ without 'devices Connected'
+        _, all_out = _bluetoothctl(["devices"])
+        all_dev = _parse_bt_device_lines(all_out)
+        return bool(_connected_fallback(all_dev))
+    return bool(_parse_bt_device_lines(out))
+
+
+def _is_mode_active(mode: str) -> bool:
+    """Check if the given mode currently has an active stream / connection."""
+    data = load_modes()
+    spec = (data.get("modes") or {}).get(mode)
+    if not spec:
+        return False
+    detect = spec.get("detect")
+    if not detect:
+        return False
+    if detect.get("process"):
+        return _check_process_connections(detect["process"])
+    if detect.get("bt_connected"):
+        return _check_bt_audio_connected()
+    return False
+
+
+def detect_active_mode() -> str | None:
+    """Return the mode that should be active based on stream detection.
+
+    Priority: if the current mode is still active keep it; otherwise pick
+    the first mode that has activity.
+    """
+    data = load_modes()
+    modes = data.get("modes") or {}
+    current = read_last_mode_valid()
+
+    # If current mode is still streaming — no switch needed.
+    if current and _is_mode_active(current):
+        return current
+
+    # Find first other mode that is active.
+    for name in modes:
+        if name == current:
+            continue
+        if _is_mode_active(name):
+            return name
+
+    return None
+
+
 def list_alsa_outputs() -> list[dict[str, Any]]:
     """Parse `aplay -l` playback devices (USB cards, bcm2835, HDMI, etc.)."""
     aplay = shutil.which("aplay")
@@ -227,12 +339,22 @@ def restart_active_audio_sinks() -> list[str]:
 
 
 def write_default_asound(card: int, device: int) -> None:
-    """Set ALSA default PCM/CTL to hw:CARD,DEV; backup existing /etc/asound.conf once."""
+    """Set ALSA default PCM/CTL via dmix (shared access); backup existing /etc/asound.conf once."""
     content = f"""{ASOUND_MARKER} — default PCM for Pi Audio Controller
 
 pcm.!default {{
     type plug
-    slave.pcm "hw:{card},{device}"
+    slave.pcm "dmixer"
+}}
+pcm.dmixer {{
+    type dmix
+    ipc_key 1024
+    slave {{
+        pcm "hw:{card},{device}"
+        period_time 0
+        period_size 1024
+        buffer_size 4096
+    }}
 }}
 ctl.!default {{
     type hw
@@ -469,8 +591,11 @@ def get_config() -> dict[str, Any]:
 def get_status() -> dict[str, Any]:
     data = load_modes()
     units = list(data.get("dashboard_units") or [])
+    current = read_last_mode_valid()
+    detected = detect_active_mode()
     return {
-        "mode": read_last_mode_valid(),
+        "mode": current,
+        "detected_mode": detected,
         "units": {u: {"active": unit_active(u)} for u in units},
         "audio": audio_status(),
         "bluetooth": bluetooth_status(),

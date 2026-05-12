@@ -7,28 +7,33 @@
 modes:
   airplay:
     description: "AirPlay 2 via shairport-sync"
+    detect:
+      process: shairport-sync
     start:
       - shairport-sync.service
-    stop:
       - raspotify.service
+      - bluetooth.service
       - bluealsa.service
 
   spotify:
     description: "Spotify Connect via raspotify (librespot)"
+    detect:
+      process: librespot
     start:
-      - raspotify.service
-    stop:
       - shairport-sync.service
+      - raspotify.service
+      - bluetooth.service
       - bluealsa.service
 
   bluetooth:
     description: "Bluetooth A2DP speaker (BlueALSA)"
+    detect:
+      bt_connected: true
     start:
-      - bluetooth.service
-      - bluealsa.service
-    stop:
       - shairport-sync.service
       - raspotify.service
+      - bluetooth.service
+      - bluealsa.service
 
 # After changing default ALSA device (web UI), restart these if active so sinks reopen ALSA.
 alsa_restart_units:
