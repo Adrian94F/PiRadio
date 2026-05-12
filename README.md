@@ -1,6 +1,6 @@
 # Pi Audio Controller
 
-Small web UI and systemd wiring for a Raspberry Pi used as a **local network speaker**: AirPlay 2 (`shairport-sync`), Spotify Connect (`raspotify`), and **Bluetooth A2DP sink** (`bluealsa` / BlueZ). Only one “sink mode” should own the speaker at a time; the UI switches modes by starting and stopping the right units.
+Small web UI and systemd wiring for a Raspberry Pi used as a **local network speaker**: AirPlay 2 (`shairport-sync`), Spotify Connect (`raspotify`), and **Bluetooth A2DP sink** (BlueALSA via **`bluez-alsa-utils`** on Debian 12 / recent Raspberry Pi OS — same daemon as the old `bluealsa` metapackage). Only one “sink mode” should own the speaker at a time; the UI switches modes by starting and stopping the right units.
 
 ## Quick install
 
@@ -23,7 +23,9 @@ Configuration:
 
 1. Pair your phone from the Pi once (e.g. `bluetoothctl`, `scan on`, `pair`, `trust`, `connect`).
 2. In the web UI, choose mode **bluetooth** so competing sinks (AirPlay / Spotify) are stopped.
-3. If audio routing fails, ensure BlueALSA is the ALSA/Pulse device your stack expects; unit names vary between Bookworm and older images—update `modes.yaml` accordingly.
+3. If audio routing fails, ensure BlueALSA is the ALSA/Pulse device your stack expects; unit names vary between Bookworm and older images—update `modes.yaml` accordingly (`systemctl list-units '*bluealsa*'` helps).
+
+If `apt` reports **`Package 'bluealsa' has no installation candidate`**, install **`bluez-alsa-utils`** instead (the setup script does this automatically).
 
 ## Development
 

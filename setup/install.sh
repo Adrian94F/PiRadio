@@ -16,10 +16,22 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
+# Bluetooth ALSA: on Debian 12+ / recent Raspberry Pi OS the APT source package is
+# bluez-alsa-utils (provides /usr/bin/bluealsa and usually bluealsa.service).
+# The old transitional name "bluealsa" is not always published as an install candidate.
+BT_PKG="bluez-alsa-utils"
+if ! apt-cache show "${BT_PKG}" &>/dev/null; then
+  BT_PKG="bluealsa"
+fi
+if ! apt-cache show "${BT_PKG}" &>/dev/null; then
+  log "Neither bluez-alsa-utils nor bluealsa is in APT; add Debian repos or install BlueALSA from source."
+  exit 1
+fi
+
 apt-get install -y --no-install-recommends \
   python3 python3-venv python3-pip \
   avahi-daemon \
-  bluealsa \
+  "${BT_PKG}" \
   bluez \
   shairport-sync \
   curl ca-certificates

@@ -1,5 +1,6 @@
 # Maps UI modes to systemd units that must be running vs stopped.
 # Adjust unit names to match your distro (e.g. bluealsa vs bluealsa@hci0).
+# Debian/Raspberry Pi OS: install APT package bluez-alsa-utils (daemon still uses bluealsa.service).
 
 modes:
   airplay:
