@@ -47,23 +47,23 @@
       <section class="page" data-page="settings" id="page-settings" hidden>
         <div class="page__pad">
           <div class="settings-card">
-            <h2 class="settings-card__title">Audio output</h2>
+            <h2 class="settings-card__title">Device name</h2>
             <p class="settings-card__text">
-              Sets ALSA default (<code>pcm.!default</code> in <code>/etc/asound.conf</code>). Active sinks restart automatically.
+              Visible as the speaker name in AirPlay, Spotify Connect, and Bluetooth.
             </p>
             <label class="field">
-              <span class="field__label">Device</span>
-              <select id="audio-select" class="input input--select"></select>
+              <span class="field__label">Name</span>
+              <input type="text" id="device-name" class="input" maxlength="248" autocomplete="off" placeholder="Living Room Speaker" />
             </label>
-            <button type="button" id="audio-apply" class="btn btn--primary btn--lg">Apply device</button>
-            <p id="audio-meta" class="settings-meta"></p>
-            <p id="audio-error" class="banner banner--error" hidden role="alert"></p>
+            <button type="button" id="device-name-save" class="btn btn--primary btn--lg">Save name</button>
+            <p id="device-name-meta" class="settings-meta"></p>
+            <p id="device-name-error" class="banner banner--error" hidden role="alert"></p>
           </div>
 
-          <div class="settings-card settings-card--bt">
+          <div class="settings-card">
             <h2 class="settings-card__title">Bluetooth</h2>
             <p class="settings-card__text">
-              Friendly name is shown when phones scan. Start visibility to pair a new device; then connect from the phone.
+              Start visibility to pair a new device; then connect from the phone.
               Pairing needs the <strong>pi-bluetooth-agent</strong> service (installed by setup) — if pairing fails, see the project README.
             </p>
             <p id="bt-unavailable" class="banner banner--warn" hidden role="status"></p>
@@ -75,11 +75,6 @@
               </button>
             </div>
 
-            <label class="field">
-              <span class="field__label">Device name (shown to others)</span>
-              <input type="text" id="bt-alias" class="input" maxlength="248" autocomplete="off" placeholder="My Pi Speaker" />
-            </label>
-            <button type="button" id="bt-save-alias" class="btn btn--primary btn--lg">Save device name</button>
             <p id="bt-adapter-meta" class="settings-meta"></p>
 
             <h3 class="settings-subhead">Connected now</h3>
@@ -98,6 +93,20 @@
             </div>
             <p id="bt-pair-hint" class="settings-meta"></p>
             <p id="bt-error" class="banner banner--error" hidden role="alert"></p>
+          </div>
+
+          <div class="settings-card">
+            <h2 class="settings-card__title">Audio output</h2>
+            <p class="settings-card__text">
+              Sets ALSA default (<code>pcm.!default</code> in <code>/etc/asound.conf</code>). Active sinks restart automatically.
+            </p>
+            <label class="field">
+              <span class="field__label">Device</span>
+              <select id="audio-select" class="input input--select"></select>
+            </label>
+            <button type="button" id="audio-apply" class="btn btn--primary btn--lg">Apply device</button>
+            <p id="audio-meta" class="settings-meta"></p>
+            <p id="audio-error" class="banner banner--error" hidden role="alert"></p>
           </div>
         </div>
       </section>

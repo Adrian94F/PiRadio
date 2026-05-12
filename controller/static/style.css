@@ -261,6 +261,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+  margin-top: 1rem;
 }
 
 .settings-card__title {
@@ -288,10 +289,6 @@ body {
   font-size: 0.8125rem;
   color: var(--muted);
   line-height: 1.45;
-}
-
-.settings-card--bt {
-  margin-top: 1rem;
 }
 
 .settings-subhead {

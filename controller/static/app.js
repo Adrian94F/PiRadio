@@ -18,9 +18,11 @@
   const audioApply = document.getElementById("audio-apply");
   const audioMeta = document.getElementById("audio-meta");
   const audioError = document.getElementById("audio-error");
+  const deviceNameInput = document.getElementById("device-name");
+  const deviceNameSave = document.getElementById("device-name-save");
+  const deviceNameMeta = document.getElementById("device-name-meta");
+  const deviceNameError = document.getElementById("device-name-error");
   const btUnavailable = document.getElementById("bt-unavailable");
-  const btAlias = document.getElementById("bt-alias");
-  const btSaveAlias = document.getElementById("bt-save-alias");
   const btAdapterMeta = document.getElementById("bt-adapter-meta");
   const btConnected = document.getElementById("bt-connected");
   const btPaired = document.getElementById("bt-paired");
@@ -44,6 +46,16 @@
     }
     audioError.hidden = false;
     audioError.textContent = msg;
+  }
+
+  function setDeviceNameError(msg) {
+    if (!msg) {
+      deviceNameError.hidden = true;
+      deviceNameError.textContent = "";
+      return;
+    }
+    deviceNameError.hidden = false;
+    deviceNameError.textContent = msg;
   }
 
   function setBtError(msg) {
@@ -209,14 +221,12 @@
   }
 
   function renderBluetooth(bt) {
-    if (!btUnavailable || !btAlias) return;
+    if (!btUnavailable) return;
 
     if (!bt || !bt.available) {
       btUnavailable.hidden = false;
       btUnavailable.textContent =
         bt && bt.error ? bt.error : "Bluetooth stack unavailable.";
-      btAlias.disabled = true;
-      btSaveAlias.disabled = true;
       btPairStart.disabled = true;
       btPairStop.disabled = true;
       btConnected.innerHTML = "";
@@ -250,13 +260,7 @@
       }
     }
 
-    btAlias.disabled = !ready;
-    btSaveAlias.disabled = !ready;
     btPairStart.disabled = !ready;
-
-    if (document.activeElement !== btAlias) {
-      btAlias.value = ad.alias || ad.name || "";
-    }
 
     const mac = ad.address || "";
     let metaLine = "";
@@ -335,6 +339,11 @@
     statusGrid.innerHTML = "";
     const units = data.units || {};
     if (data.mode) highlightMode(data.mode);
+
+    // Device name
+    if (deviceNameInput && document.activeElement !== deviceNameInput) {
+      deviceNameInput.value = data.device_name || "";
+    }
 
     renderAudio(data.audio);
 
@@ -436,22 +445,26 @@
     });
   }
 
-  btSaveAlias.addEventListener("click", async () => {
-    const name = (btAlias.value || "").trim();
+  deviceNameSave.addEventListener("click", async () => {
+    const name = (deviceNameInput.value || "").trim();
     if (!name) {
-      setBtError("Enter a device name.");
+      setDeviceNameError("Enter a device name.");
       return;
     }
-    setBtError("");
+    setDeviceNameError("");
     try {
-      await fetchJson("/api/bluetooth/alias", {
+      const res = await fetchJson("/api/device-name", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
+      deviceNameMeta.textContent = `Saved as "${res.name}" for AirPlay, Spotify & Bluetooth.`;
+      if (res.errors) {
+        setDeviceNameError(res.errors.join("; "));
+      }
       await refreshStatus();
     } catch (e) {
-      setBtError(String(e.message || e));
+      setDeviceNameError(String(e.message || e));
     }
   });
 

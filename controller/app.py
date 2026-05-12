@@ -43,7 +43,15 @@ AUDIO_STATE_FILE = Path(
 
 ASOUND_PATH = Path(os.environ.get("PI_AUDIO_ASOUND", "/etc/asound.conf"))
 ASOUND_MARKER = "# Managed by pi-audio-controller"
+DEVICE_NAME_FILE = Path(
+    os.environ.get(
+        "PI_AUDIO_DEVICE_NAME",
+        "/var/lib/pi-audio-controller/device-name",
+    )
+)
 
+SHAIRPORT_CONF = Path("/etc/shairport-sync.conf")
+RASPOTIFY_CONF = Path("/etc/raspotify/conf")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 APLAY_LINE = re.compile(
@@ -59,7 +67,7 @@ _mode_monitor_task: asyncio.Task | None = None
 
 
 async def _auto_mode_loop() -> None:
-    """Background task: detect active audio source and auto-switch mode."""
+    """Background task: if current mode is idle and another is streaming, switch."""
     while True:
         await asyncio.sleep(5)
         try:
@@ -70,7 +78,6 @@ async def _auto_mode_loop() -> None:
                 continue
             current = read_last_mode_valid()
             if detected != current:
-                # Current mode inactive, another has a stream → switch.
                 try:
                     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
                     STATE_FILE.write_text(detected + "\n", encoding="utf-8")
@@ -94,6 +101,10 @@ async def _stop_mode_monitor() -> None:
             await _mode_monitor_task
         except asyncio.CancelledError:
             pass
+
+
+class DeviceNameBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=248)
 
 
 class AudioSelectBody(BaseModel):
@@ -591,11 +602,9 @@ def get_config() -> dict[str, Any]:
 def get_status() -> dict[str, Any]:
     data = load_modes()
     units = list(data.get("dashboard_units") or [])
-    current = read_last_mode_valid()
-    detected = detect_active_mode()
     return {
-        "mode": current,
-        "detected_mode": detected,
+        "mode": read_last_mode_valid(),
+        "device_name": read_device_name(),
         "units": {u: {"active": unit_active(u)} for u in units},
         "audio": audio_status(),
         "bluetooth": bluetooth_status(),
@@ -628,6 +637,123 @@ def post_mode(mode: str) -> dict[str, str]:
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
     return {"mode": mode, "ok": "true"}
+
+
+# ---------------------------------------------------------------------------
+# Unified device name — sets Bluetooth alias, shairport-sync, raspotify
+# ---------------------------------------------------------------------------
+
+def read_device_name() -> str:
+    try:
+        t = DEVICE_NAME_FILE.read_text(encoding="utf-8").strip()
+        if t:
+            return t
+    except OSError:
+        pass
+    return ""
+
+
+def _set_shairport_name(name: str) -> None:
+    """Update name = \"…\" in /etc/shairport-sync.conf general block."""
+    if not SHAIRPORT_CONF.is_file():
+        return
+    text = SHAIRPORT_CONF.read_text(encoding="utf-8")
+    new_text = re.sub(
+        r'(name\s*=\s*)"[^"]*"',
+        f'\\1"{name}"',
+        text,
+        count=1,
+    )
+    if new_text != text:
+        SHAIRPORT_CONF.write_text(new_text, encoding="utf-8")
+
+
+def _set_raspotify_name(name: str) -> None:
+    """Set LIBRESPOT_NAME in /etc/raspotify/conf."""
+    if not RASPOTIFY_CONF.is_file():
+        return
+    text = RASPOTIFY_CONF.read_text(encoding="utf-8")
+    new_line = f'LIBRESPOT_NAME="{name}"'
+    if re.search(r'^\s*LIBRESPOT_NAME\s*=', text, re.M):
+        new_text = re.sub(
+            r'^\s*LIBRESPOT_NAME\s*=.*$',
+            new_line,
+            text,
+            count=1,
+            flags=re.M,
+        )
+    elif re.search(r'^\s*#\s*LIBRESPOT_NAME\s*=', text, re.M):
+        new_text = re.sub(
+            r'^(\s*#\s*LIBRESPOT_NAME\s*=.*)$',
+            f'\\1\n{new_line}',
+            text,
+            count=1,
+            flags=re.M,
+        )
+    else:
+        new_text = text.rstrip() + f'\n\n{new_line}\n'
+    if new_text != text:
+        RASPOTIFY_CONF.write_text(new_text, encoding="utf-8")
+
+
+def apply_device_name(name: str) -> dict[str, Any]:
+    """Set the unified device name across Bluetooth, AirPlay, and Spotify."""
+    errors: list[str] = []
+
+    # Bluetooth
+    if shutil.which("bluetoothctl"):
+        try:
+            proc = subprocess.run(
+                ["bluetoothctl", "system-alias", name],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if proc.returncode != 0:
+                errors.append(f"bluetooth: {(proc.stderr or proc.stdout or 'failed')[:200]}")
+        except Exception as e:
+            errors.append(f"bluetooth: {e}")
+
+    # Shairport-sync
+    try:
+        _set_shairport_name(name)
+        if unit_active("shairport-sync.service") == "active":
+            run_systemctl(["restart", "shairport-sync.service"])
+    except Exception as e:
+        errors.append(f"shairport: {e}")
+
+    # Raspotify
+    try:
+        _set_raspotify_name(name)
+        if unit_active("raspotify.service") == "active":
+            run_systemctl(["restart", "raspotify.service"])
+    except Exception as e:
+        errors.append(f"raspotify: {e}")
+
+    # Persist
+    try:
+        DEVICE_NAME_FILE.parent.mkdir(parents=True, exist_ok=True)
+        DEVICE_NAME_FILE.write_text(name + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+    return {"ok": True, "name": name, "errors": errors or None}
+
+
+@app.get("/api/device-name")
+def get_device_name() -> dict[str, str]:
+    return {"name": read_device_name()}
+
+
+@app.post("/api/device-name")
+def post_device_name(body: DeviceNameBody) -> dict[str, Any]:
+    name = re.sub(r"[\x00-\x1f]", "", body.name.strip())
+    if not name:
+        raise HTTPException(status_code=400, detail="empty name")
+    try:
+        return apply_device_name(name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/bluetooth/alias")
