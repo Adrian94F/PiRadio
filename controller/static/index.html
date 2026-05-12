@@ -2,49 +2,98 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0c1118" />
   <title>Pi Audio Controller</title>
   <link rel="stylesheet" href="/assets/style.css" />
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>Pi Audio Controller</h1>
-      <p class="sub">Modes switch systemd units (AirPlay, Spotify Connect, Bluetooth sink).</p>
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar__inner">
+        <h1 class="topbar__title">Pi Audio</h1>
+        <p class="topbar__subtitle" id="page-subtitle">Choose playback mode</p>
+      </div>
     </header>
 
-    <section class="card">
-      <h2>Mode</h2>
-      <div id="mode-radios" class="modes"></div>
-      <p id="mode-error" class="error" hidden></p>
-    </section>
+    <main class="main" id="main-scroll">
+      <!-- Mode -->
+      <section class="page" data-page="mode" id="page-mode">
+        <div class="page__pad">
+          <p id="mode-error" class="banner banner--error" hidden role="alert"></p>
+          <div id="mode-buttons" class="mode-grid" role="group" aria-label="Playback mode"></div>
+        </div>
+      </section>
 
-    <section class="card">
-      <h2>Audio output</h2>
-      <p class="hint">Sets ALSA default device (<code>pcm.!default</code> in <code>/etc/asound.conf</code>) for shairport-sync, raspotify, and BlueALSA. Active sinks are restarted.</p>
-      <label class="row">
-        <span>Device</span>
-        <select id="audio-select"></select>
-        <button type="button" id="audio-apply">Apply</button>
-      </label>
-      <p id="audio-meta" class="meta"></p>
-      <p id="audio-error" class="error" hidden></p>
-    </section>
+      <!-- Status + logs -->
+      <section class="page" data-page="status" id="page-status" hidden>
+        <div class="page__pad page__pad--grow">
+          <h2 class="page__heading">Services</h2>
+          <div id="status-grid" class="status-grid"></div>
 
-    <section class="card">
-      <h2>Service status</h2>
-      <div id="status-grid" class="status-grid"></div>
-    </section>
+          <h2 class="page__heading page__heading--logs">Live logs</h2>
+          <div class="logs-toolbar">
+            <label class="field">
+              <span class="field__label">Journal unit</span>
+              <select id="log-unit" class="input input--select"></select>
+            </label>
+            <button type="button" id="log-connect" class="btn btn--primary btn--block-sm">Stream</button>
+          </div>
+          <pre id="log-output" class="log" aria-live="polite"></pre>
+        </div>
+      </section>
 
-    <section class="card">
-      <h2>Live logs</h2>
-      <label class="row">
-        <span>Unit</span>
-        <select id="log-unit"></select>
-        <button type="button" id="log-connect">Connect</button>
-      </label>
-      <pre id="log-output" class="log"></pre>
-    </section>
+      <!-- Settings -->
+      <section class="page" data-page="settings" id="page-settings" hidden>
+        <div class="page__pad">
+          <div class="settings-card">
+            <h2 class="settings-card__title">Audio output</h2>
+            <p class="settings-card__text">
+              Sets ALSA default (<code>pcm.!default</code> in <code>/etc/asound.conf</code>). Active sinks restart automatically.
+            </p>
+            <label class="field">
+              <span class="field__label">Device</span>
+              <select id="audio-select" class="input input--select"></select>
+            </label>
+            <button type="button" id="audio-apply" class="btn btn--primary btn--lg">Apply device</button>
+            <p id="audio-meta" class="settings-meta"></p>
+            <p id="audio-error" class="banner banner--error" hidden role="alert"></p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Primary">
+      <a href="#/mode" class="bottom-nav__item" data-nav="mode">
+        <svg class="bottom-nav__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        </svg>
+        <span class="bottom-nav__label">Mode</span>
+      </a>
+      <a href="#/status" class="bottom-nav__item" data-nav="status">
+        <svg class="bottom-nav__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
+        <span class="bottom-nav__label">Status</span>
+      </a>
+      <a href="#/settings" class="bottom-nav__item" data-nav="settings">
+        <svg class="bottom-nav__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="4" y1="21" x2="4" y2="14" />
+          <line x1="4" y1="10" x2="4" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12" y2="3" />
+          <line x1="20" y1="21" x2="20" y2="16" />
+          <line x1="20" y1="12" x2="20" y2="3" />
+          <line x1="1" y1="14" x2="7" y2="14" />
+          <line x1="9" y1="8" x2="15" y2="8" />
+          <line x1="17" y1="16" x2="23" y2="16" />
+        </svg>
+        <span class="bottom-nav__label">Settings</span>
+      </a>
+    </nav>
   </div>
   <script src="/assets/app.js"></script>
 </body>

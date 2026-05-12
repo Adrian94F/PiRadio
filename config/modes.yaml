@@ -1,6 +1,8 @@
 # Maps UI modes to systemd units that must be running vs stopped.
 # Adjust unit names to match your distro (e.g. bluealsa vs bluealsa@hci0).
 # Debian/Raspberry Pi OS: install APT package bluez-alsa-utils (daemon still uses bluealsa.service).
+# Do not use YAML 1.1 boolean words as unquoted keys (e.g. off/on/yes/no) — PyYAML turns them into
+# Python booleans and the mode name becomes "false" in JSON, which breaks the web UI.
 
 modes:
   airplay:
@@ -27,14 +29,6 @@ modes:
     stop:
       - shairport-sync.service
       - raspotify.service
-
-  off:
-    description: "All audio sinks stopped"
-    start: []
-    stop:
-      - shairport-sync.service
-      - raspotify.service
-      - bluealsa.service
 
 # After changing default ALSA device (web UI), restart these if active so sinks reopen ALSA.
 alsa_restart_units:

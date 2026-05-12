@@ -1,6 +1,15 @@
 (() => {
-  const modeRadios = document.getElementById("mode-radios");
+  const PAGE_SUBTITLE = {
+    mode: "Choose playback mode",
+    status: "Services & journal stream",
+    settings: "Audio output device",
+  };
+
+  const ROUTES = ["mode", "status", "settings"];
+
+  const modeButtons = document.getElementById("mode-buttons");
   const modeError = document.getElementById("mode-error");
+  const pageSubtitle = document.getElementById("page-subtitle");
   const statusGrid = document.getElementById("status-grid");
   const logUnit = document.getElementById("log-unit");
   const logConnect = document.getElementById("log-connect");
@@ -34,6 +43,43 @@
     modeError.textContent = msg;
   }
 
+  function getRoute() {
+    const raw = (window.location.hash || "#/mode").replace(/^#\/?/, "");
+    const base = (raw.split("/")[0] || "mode").toLowerCase();
+    return ROUTES.includes(base) ? base : "mode";
+  }
+
+  function applyRoute(route) {
+    document.querySelectorAll("[data-page]").forEach((el) => {
+      const show = el.getAttribute("data-page") === route;
+      el.hidden = !show;
+      el.setAttribute("aria-hidden", show ? "false" : "true");
+    });
+
+    document.querySelectorAll("[data-nav]").forEach((el) => {
+      const active = el.getAttribute("data-nav") === route;
+      el.classList.toggle("bottom-nav__item--active", active);
+      if (active) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
+    });
+
+    if (pageSubtitle) {
+      pageSubtitle.textContent = PAGE_SUBTITLE[route] || "";
+    }
+
+    if (route !== "status") {
+      stopLogs();
+    }
+  }
+
+  function initHash() {
+    if (!window.location.hash || window.location.hash === "#") {
+      const base = `${window.location.pathname}${window.location.search}`;
+      window.history.replaceState(null, "", `${base}#/mode`);
+    }
+    applyRoute(getRoute());
+  }
+
   async function fetchJson(url, opts) {
     const r = await fetch(url, opts);
     if (!r.ok) {
@@ -49,46 +95,50 @@
     return r.json();
   }
 
+  function highlightMode(mode) {
+    if (!modeButtons) return;
+    modeButtons.querySelectorAll(".mode-btn").forEach((btn) => {
+      const active = btn.dataset.mode === mode;
+      btn.classList.toggle("mode-btn--active", active);
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+
   function renderModes() {
-    modeRadios.innerHTML = "";
+    if (!modeButtons) return;
+    modeButtons.innerHTML = "";
     const names = Object.keys(config.modes || {});
     names.forEach((name) => {
-      const label = document.createElement("label");
-      label.className = "mode-opt";
-      const input = document.createElement("input");
-      input.type = "radio";
-      input.name = "mode";
-      input.value = name;
-      input.addEventListener("change", async () => {
-        if (!input.checked) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mode-btn";
+      btn.dataset.mode = name;
+      btn.setAttribute("aria-pressed", "false");
+
+      const title = document.createElement("span");
+      title.className = "mode-btn__title";
+      title.textContent = name;
+
+      const desc = document.createElement("span");
+      desc.className = "mode-btn__desc";
+      desc.textContent = (config.modes[name] && config.modes[name].description) || "";
+
+      btn.appendChild(title);
+      btn.appendChild(desc);
+
+      btn.addEventListener("click", async () => {
         setModeError("");
         try {
           await fetchJson(`/api/mode/${encodeURIComponent(name)}`, { method: "POST" });
-          syncModeRadio(name);
+          highlightMode(name);
           await refreshStatus();
         } catch (e) {
           setModeError(String(e.message || e));
           await refreshStatus();
         }
       });
-      const meta = document.createElement("div");
-      meta.className = "mode-meta";
-      const strong = document.createElement("strong");
-      strong.textContent = name;
-      const span = document.createElement("span");
-      span.textContent = (config.modes[name] && config.modes[name].description) || "";
-      meta.appendChild(strong);
-      meta.appendChild(span);
-      label.appendChild(input);
-      label.appendChild(meta);
-      modeRadios.appendChild(label);
-    });
-  }
 
-  function syncModeRadio(mode) {
-    if (!mode) return;
-    modeRadios.querySelectorAll('input[name="mode"]').forEach((el) => {
-      el.checked = el.value === mode;
+      modeButtons.appendChild(btn);
     });
   }
 
@@ -102,7 +152,7 @@
     if (!outputs.length) {
       const o = document.createElement("option");
       o.value = "";
-      o.textContent = "No playback devices (install alsa-utils, check USB)";
+      o.textContent = "No playback devices (alsa-utils / USB?)";
       audioSelect.appendChild(o);
       audioSelect.disabled = true;
       audioApply.disabled = true;
@@ -127,10 +177,10 @@
     if (current && current.id) {
       meta = `Selected: ${current.label || current.id}`;
       if (current.missing) {
-        meta += " — device not found now (unplugged?).";
+        meta += " — device not listed now (unplugged?).";
       }
     } else {
-      meta = "No selection saved yet; choose a device and click Apply.";
+      meta = "Choose a device and tap Apply.";
     }
     audioMeta.textContent = meta;
   }
@@ -138,7 +188,7 @@
   function renderStatus(data) {
     statusGrid.innerHTML = "";
     const units = data.units || {};
-    if (data.mode) syncModeRadio(data.mode);
+    if (data.mode) highlightMode(data.mode);
 
     renderAudio(data.audio);
 
@@ -247,6 +297,10 @@
       setAudioError(String(e.message || e));
     }
   });
+
+  window.addEventListener("hashchange", () => applyRoute(getRoute()));
+
+  initHash();
 
   loadConfig()
     .then(() => refreshStatus())

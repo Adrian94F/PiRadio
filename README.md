@@ -14,7 +14,7 @@ Then open `http://<pi-ip>:8765` on your LAN.
 
 Configuration:
 
-- **Modes and unit names:** `/etc/pi-audio-controller/modes.yaml` (installed once; edit to match your distro, e.g. `bluealsa@hci0.service` instead of `bluealsa.service`).
+- **Modes and unit names:** `/etc/pi-audio-controller/modes.yaml` (installed once; edit to match your distro, e.g. `bluealsa@hci0.service` instead of `bluealsa.service`). Unquoted YAML keys like **`off`** are parsed as booleans, so the UI can show a broken **`false`** mode—use quoted keys (e.g. `"off":`) if you add an “all stopped” mode back.
 - **Last selected mode (for the UI):** `/var/lib/pi-audio-controller/current-mode`.
 - **Default ALSA output (USB or built-in):** chosen in the web UI; written to **`/etc/asound.conf`** (previous file backed up to **`asound.conf.bak.pi-audio-*`** if it was not already managed) and saved under **`/var/lib/pi-audio-controller/audio-output.json`**. Services listed in **`alsa_restart_units`** in `modes.yaml` are restarted when they are active.
 - **Raspotify:** `/etc/default/raspotify`.
