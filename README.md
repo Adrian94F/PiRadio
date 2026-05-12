@@ -12,6 +12,24 @@ sudo ./setup/install.sh
 
 Then open `http://<pi-ip>:8765` on your LAN.
 
+## Update after `git pull`
+
+From the repo on the Pi (same paths as install):
+
+```bash
+cd /path/to/pi-audio-controller   # your clone
+git pull
+sudo ./setup/update.sh
+```
+
+Or pull inside the script:
+
+```bash
+sudo ./setup/update.sh --pull
+```
+
+Use **`--deps`** to upgrade Python packages to match `requirements.txt` (otherwise dependencies are only ensured to be installed). Existing **`/etc/pi-audio-controller/modes.yaml`** is never overwritten.
+
 Configuration:
 
 - **Modes and unit names:** `/etc/pi-audio-controller/modes.yaml` (installed once; edit to match your distro, e.g. `bluealsa@hci0.service` instead of `bluealsa.service`). Unquoted YAML keys like **`off`** are parsed as booleans, so the UI can show a broken **`false`** mode—use quoted keys (e.g. `"off":`) if you add an “all stopped” mode back.
