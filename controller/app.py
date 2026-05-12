@@ -65,9 +65,19 @@ def _config_path(name: str) -> Path:
     raise FileNotFoundError(f"Missing {name}; tried: {[str(d / name) for d in CONFIG_DIRS]}")
 
 
+def _modes_only_str_keys(raw: Any) -> dict[str, Any]:
+    """YAML 1.1 parses unquoted `off`/`on`/etc. as booleans — drop non-str keys."""
+    if not isinstance(raw, dict):
+        return {}
+    return {k: v for k, v in raw.items() if isinstance(k, str)}
+
+
 def load_modes() -> dict[str, Any]:
     with open(_config_path("modes.yaml"), encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f) or {}
+    if isinstance(data.get("modes"), dict):
+        data = {**data, "modes": _modes_only_str_keys(data["modes"])}
+    return data
 
 
 def run_systemctl(args: list[str]) -> tuple[int, str, str]:
@@ -123,6 +133,15 @@ def read_last_mode() -> str | None:
         return t or None
     except OSError:
         return None
+
+
+def read_last_mode_valid() -> str | None:
+    """Last mode only if it exists in modes.yaml (drops stale e.g. ``false`` from old YAML bug)."""
+    m = read_last_mode()
+    if not m:
+        return None
+    modes = (load_modes().get("modes") or {})
+    return m if m in modes else None
 
 
 def list_alsa_outputs() -> list[dict[str, Any]]:
@@ -274,7 +293,7 @@ def get_status() -> dict[str, Any]:
     data = load_modes()
     units = list(data.get("dashboard_units") or [])
     return {
-        "mode": read_last_mode(),
+        "mode": read_last_mode_valid(),
         "units": {u: {"active": unit_active(u)} for u in units},
         "audio": audio_status(),
     }
