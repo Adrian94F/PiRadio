@@ -1,0 +1,12 @@
+# softwarebuttond — D-Bus → MQTT bridge configuration.
+# Installed to /etc/pi-audio-controller/softwarebuttond.yaml
+
+mqtt:
+  host: "127.0.0.1"
+  port: 1883
+  # username: ""
+  # password: ""
+
+# Periodic reconciliation interval (seconds).
+# Fallback polling is used only when D-Bus signals are unavailable for a source.
+reconcile_interval: 10

@@ -85,3 +85,80 @@ PI_AUDIO_CONFIG=../config uvicorn app:app --reload --host 127.0.0.1 --port 8765
 ```
 
 The UI expects `systemctl` and `journalctl` (same as on the Pi).
+
+## Home Assistant integration (softwarebuttond)
+
+An independent daemon **`softwarebuttond`** bridges D-Bus playback events to MQTT so Home Assistant discovers the Pi as an audio device automatically.
+
+### Architecture
+
+```
+                D-Bus
+   ┌─────────────────────────┐
+   │                         │
+Spotify ─┐                   │
+AirPlay ─┼──► softwarebuttond├──► MQTT ─► Home Assistant
+BT A2DP ─┘                   │
+   └─────────────────────────┘
+```
+
+### What appears in Home Assistant (via MQTT Discovery)
+
+| Entity | Type | Values |
+|--------|------|--------|
+| `binary_sensor.spotify_playing` | binary_sensor | ON / OFF |
+| `binary_sensor.airplay_playing` | binary_sensor | ON / OFF |
+| `binary_sensor.bluetooth_playing` | binary_sensor | ON / OFF |
+| `binary_sensor.any_audio_playing` | binary_sensor | ON / OFF |
+| `sensor.active_audio_source` | sensor | spotify / airplay / bluetooth / idle |
+
+### Detection methods
+
+| Source | D-Bus interface | Property |
+|--------|----------------|----------|
+| Spotify (raspotify) | `org.mpris.MediaPlayer2.Player` | `PlaybackStatus` (Playing/Paused/Stopped) |
+| AirPlay (shairport-sync) | `org.gnome.ShairportSync.RemoteControl` | `PlayerState` (0/1/2) |
+| Bluetooth A2DP | `org.bluez.MediaTransport1` | `State` (idle/pending/active) |
+
+Falls back to TCP connection check (`ss`) if D-Bus is unavailable for a source.
+
+### Configuration
+
+Edit `/etc/pi-audio-controller/softwarebuttond.yaml`:
+
+```yaml
+mqtt:
+  host: "127.0.0.1"
+  port: 1883
+  # username: ""
+  # password: ""
+reconcile_interval: 10
+```
+
+### Manual setup (if not using install.sh)
+
+```bash
+sudo apt install mosquitto mosquitto-clients
+sudo systemctl enable --now mosquitto
+
+# Daemon venv
+sudo python3 -m venv /opt/pi-audio-controller/venv-softwarebuttond
+sudo /opt/pi-audio-controller/venv-softwarebuttond/bin/pip install -r softwarebuttond/requirements.txt
+sudo cp softwarebuttond/softwarebuttond.py /opt/pi-audio-controller/
+sudo cp config/softwarebuttond.yaml /etc/pi-audio-controller/
+sudo cp systemd/softwarebuttond.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now softwarebuttond
+```
+
+### Home Assistant side
+
+1. Add the **MQTT integration** in HA (Settings → Devices & Services → Add → MQTT).
+2. Point it at the Pi's IP (or `127.0.0.1` if HA runs on the same host), port 1883.
+3. Entities appear automatically via MQTT Discovery — no manual YAML needed.
+
+### Logs
+
+```bash
+journalctl -u softwarebuttond -f
+```

@@ -36,6 +36,7 @@ apt-get install -y --no-install-recommends \
   "${BT_PKG}" \
   bluez \
   shairport-sync \
+  mosquitto mosquitto-clients \
   curl ca-certificates
 
 # Spotify Connect client (raspotify / librespot wrapper)
@@ -70,6 +71,24 @@ mkdir -p "${INSTALL_ROOT}/scripts"
 install -m 0644 "${REPO_ROOT}/scripts/bt-default-agent.expect" "${INSTALL_ROOT}/scripts/bt-default-agent.expect"
 install -m 0644 "${REPO_ROOT}/systemd/pi-bluetooth-agent.service" /etc/systemd/system/pi-bluetooth-agent.service
 
+log "Installing softwarebuttond (D-Bus → MQTT bridge for Home Assistant)…"
+install -m 0755 "${REPO_ROOT}/softwarebuttond/softwarebuttond.py" "${INSTALL_ROOT}/softwarebuttond.py"
+install -m 0644 "${REPO_ROOT}/softwarebuttond/requirements.txt" "${INSTALL_ROOT}/requirements-softwarebuttond.txt"
+if [[ ! -d "${INSTALL_ROOT}/venv-softwarebuttond" ]]; then
+  python3 -m venv "${INSTALL_ROOT}/venv-softwarebuttond"
+fi
+"${INSTALL_ROOT}/venv-softwarebuttond/bin/pip" install --upgrade pip -q
+"${INSTALL_ROOT}/venv-softwarebuttond/bin/pip" install -r "${INSTALL_ROOT}/requirements-softwarebuttond.txt"
+if [[ ! -f "${CONFIG_DIR}/softwarebuttond.yaml" ]]; then
+  install -m 0644 "${REPO_ROOT}/config/softwarebuttond.yaml" "${CONFIG_DIR}/softwarebuttond.yaml"
+  log "Installed default ${CONFIG_DIR}/softwarebuttond.yaml."
+fi
+install -m 0644 "${REPO_ROOT}/systemd/softwarebuttond.service" /etc/systemd/system/softwarebuttond.service
+
+log "Enabling Mosquitto MQTT broker…"
+systemctl enable mosquitto.service
+systemctl restart mosquitto.service
+
 log "Installing systemd units…"
 install -m 0644 "${REPO_ROOT}/systemd/pi-audio-controller.service" /etc/systemd/system/pi-audio-controller.service
 systemctl daemon-reload
@@ -77,6 +96,8 @@ systemctl enable pi-bluetooth-agent.service
 systemctl restart pi-bluetooth-agent.service
 systemctl enable pi-audio-controller.service
 systemctl restart pi-audio-controller.service
+systemctl enable softwarebuttond.service
+systemctl restart softwarebuttond.service
 
 HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
 log "Done. Open http://${HOST_IP:-<pi-ip>}:8765"

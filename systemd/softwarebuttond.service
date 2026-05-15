@@ -1,0 +1,18 @@
+[Unit]
+Description=softwarebuttond — D-Bus to MQTT bridge for Pi Audio Controller
+After=network-online.target bluetooth.service mosquitto.service dbus.service
+Wants=network-online.target mosquitto.service
+
+[Service]
+Type=simple
+Environment=LOG_LEVEL=INFO
+WorkingDirectory=/opt/pi-audio-controller
+ExecStart=/opt/pi-audio-controller/venv-softwarebuttond/bin/python3 /opt/pi-audio-controller/softwarebuttond.py
+Restart=on-failure
+RestartSec=5
+
+# Needs system D-Bus access for BlueZ and MPRIS signals.
+User=root
+
+[Install]
+WantedBy=multi-user.target
