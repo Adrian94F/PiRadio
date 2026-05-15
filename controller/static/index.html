@@ -109,6 +109,19 @@
             <p id="audio-meta" class="settings-meta"></p>
             <p id="audio-error" class="banner banner--error" hidden role="alert"></p>
           </div>
+
+          <div class="settings-card">
+            <h2 class="settings-card__title">Mode switching</h2>
+            <p class="settings-card__text">
+              <strong>Exclusive</strong> (recommended): only one audio service runs at a time — eliminates audio dropouts.<br>
+              <strong>Auto</strong>: all services stay running and mode follows the active source (requires dmix, may cause dropouts).
+            </p>
+            <label class="toggle-field">
+              <input type="checkbox" id="auto-mode-toggle" class="toggle-field__input" />
+              <span class="toggle-field__label">Auto mode (all services always running)</span>
+            </label>
+            <p id="auto-mode-meta" class="settings-meta"></p>
+          </div>
         </div>
       </section>
     </main>

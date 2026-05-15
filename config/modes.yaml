@@ -11,8 +11,8 @@ modes:
       process: shairport-sync
     start:
       - shairport-sync.service
+    stop:
       - raspotify.service
-      - bluetooth.service
       - bluealsa.service
 
   spotify:
@@ -20,9 +20,9 @@ modes:
     detect:
       process: librespot
     start:
-      - shairport-sync.service
       - raspotify.service
-      - bluetooth.service
+    stop:
+      - shairport-sync.service
       - bluealsa.service
 
   bluetooth:
@@ -30,10 +30,11 @@ modes:
     detect:
       bt_connected: true
     start:
-      - shairport-sync.service
-      - raspotify.service
       - bluetooth.service
       - bluealsa.service
+    stop:
+      - shairport-sync.service
+      - raspotify.service
 
 # After changing default ALSA device (web UI), restart these if active so sinks reopen ALSA.
 alsa_restart_units:

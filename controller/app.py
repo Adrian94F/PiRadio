@@ -43,6 +43,12 @@ AUDIO_STATE_FILE = Path(
 
 ASOUND_PATH = Path(os.environ.get("PI_AUDIO_ASOUND", "/etc/asound.conf"))
 ASOUND_MARKER = "# Managed by pi-audio-controller"
+AUTO_MODE_FILE = Path(
+    os.environ.get(
+        "PI_AUDIO_AUTO_MODE",
+        "/var/lib/pi-audio-controller/auto-mode",
+    )
+)
 DEVICE_NAME_FILE = Path(
     os.environ.get(
         "PI_AUDIO_DEVICE_NAME",
@@ -66,10 +72,25 @@ app = FastAPI(title="Pi Audio Controller")
 _mode_monitor_task: asyncio.Task | None = None
 
 
+def read_auto_mode() -> bool:
+    """Return True if auto-mode switching is enabled (default: False)."""
+    try:
+        return AUTO_MODE_FILE.read_text(encoding="utf-8").strip() == "1"
+    except OSError:
+        return False
+
+
+def write_auto_mode(enabled: bool) -> None:
+    AUTO_MODE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    AUTO_MODE_FILE.write_text("1\n" if enabled else "0\n", encoding="utf-8")
+
+
 async def _auto_mode_loop() -> None:
     """Background task: if current mode is idle and another is streaming, switch."""
     while True:
         await asyncio.sleep(5)
+        if not read_auto_mode():
+            continue
         try:
             detected = await asyncio.get_event_loop().run_in_executor(
                 None, detect_active_mode,
@@ -177,11 +198,14 @@ def apply_mode(mode: str) -> None:
     spec = modes[mode]
     stop_first = list(spec.get("stop") or [])
     start_after = list(spec.get("start") or [])
+    auto = read_auto_mode()
 
-    for unit in stop_first:
-        code, _, err = run_systemctl(["stop", unit])
-        if code != 0:
-            raise RuntimeError(f"stop {unit}: {err or 'failed'}")
+    if not auto:
+        # Exclusive mode: stop competing services before starting
+        for unit in stop_first:
+            code, _, err = run_systemctl(["stop", unit])
+            if code != 0:
+                raise RuntimeError(f"stop {unit}: {err or 'failed'}")
 
     for unit in start_after:
         code, _, err = run_systemctl(["start", unit])
@@ -350,8 +374,11 @@ def restart_active_audio_sinks() -> list[str]:
 
 
 def write_default_asound(card: int, device: int) -> None:
-    """Set ALSA default PCM/CTL via dmix (shared access); backup existing /etc/asound.conf once."""
-    content = f"""{ASOUND_MARKER} — default PCM for Pi Audio Controller
+    """Write /etc/asound.conf. Uses direct hw access (exclusive) or dmix depending on auto_mode."""
+    auto = read_auto_mode()
+    if auto:
+        # Auto mode: multiple services may run — need dmix for shared access
+        content = f"""{ASOUND_MARKER} — default PCM for Pi Audio Controller (shared/dmix)
 
 pcm.!default {{
     type plug
@@ -362,10 +389,25 @@ pcm.dmixer {{
     ipc_key 1024
     slave {{
         pcm "hw:{card},{device}"
-        period_time 0
-        period_size 1024
-        buffer_size 4096
+        rate 44100
+        format S16_LE
+        channels 2
+        period_size 4096
+        buffer_size 16384
     }}
+}}
+ctl.!default {{
+    type hw
+    card {card}
+}}
+"""
+    else:
+        # Exclusive mode: only one service at a time — direct hw access, no XRUN from dmix
+        content = f"""{ASOUND_MARKER} — default PCM for Pi Audio Controller (exclusive)
+
+pcm.!default {{
+    type plug
+    slave.pcm "hw:{card},{device}"
 }}
 ctl.!default {{
     type hw
@@ -599,12 +641,36 @@ def get_config() -> dict[str, Any]:
     }
 
 
+@app.get("/api/auto-mode")
+def get_auto_mode() -> dict[str, bool]:
+    return {"enabled": read_auto_mode()}
+
+
+@app.post("/api/auto-mode")
+def post_auto_mode(body: dict[str, Any]) -> dict[str, Any]:
+    enabled = bool(body.get("enabled", False))
+    write_auto_mode(enabled)
+    # When switching to exclusive mode, rewrite asound.conf if we know the current output
+    if not enabled:
+        state = audio_status()
+        if state.get("card") is not None and state.get("device") is not None:
+            write_default_asound(int(state["card"]), int(state["device"]))
+            restart_active_audio_sinks()
+    elif enabled:
+        state = audio_status()
+        if state.get("card") is not None and state.get("device") is not None:
+            write_default_asound(int(state["card"]), int(state["device"]))
+            restart_active_audio_sinks()
+    return {"ok": True, "enabled": enabled}
+
+
 @app.get("/api/status")
 def get_status() -> dict[str, Any]:
     data = load_modes()
     units = list(data.get("dashboard_units") or [])
     return {
         "mode": read_last_mode_valid(),
+        "auto_mode": read_auto_mode(),
         "device_name": read_device_name(),
         "units": {u: {"active": unit_active(u)} for u in units},
         "audio": audio_status(),

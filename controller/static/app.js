@@ -33,6 +33,8 @@
   const btAdapterOff = document.getElementById("bt-adapter-off");
   const btAdapterOffMsg = document.getElementById("bt-adapter-off-msg");
   const btEnable = document.getElementById("bt-enable");
+  const autoModeToggle = document.getElementById("auto-mode-toggle");
+  const autoModeMeta = document.getElementById("auto-mode-meta");
   let config = { modes: {}, dashboard_units: [] };
   let statusTimer = null;
   let logWs = null;
@@ -346,6 +348,11 @@
       deviceNameInput.value = data.device_name || "";
     }
 
+    // Auto-mode toggle
+    if (autoModeToggle) {
+      autoModeToggle.checked = !!data.auto_mode;
+    }
+
     renderAudio(data.audio);
 
     renderBluetooth(data.bluetooth);
@@ -494,6 +501,25 @@
       await refreshStatus();
     } catch (e) {
       setBtError(String(e.message || e));
+    }
+  });
+
+  autoModeToggle.addEventListener("change", async () => {
+    const enabled = autoModeToggle.checked;
+    autoModeMeta.textContent = "Saving…";
+    try {
+      await fetchJson("/api/auto-mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      autoModeMeta.textContent = enabled
+        ? "Auto mode enabled — all services running, dmix active."
+        : "Exclusive mode — only active source runs, direct hardware access.";
+      await refreshStatus();
+    } catch (e) {
+      autoModeMeta.textContent = "Error: " + (e.message || e);
+      autoModeToggle.checked = !enabled;
     }
   });
 
