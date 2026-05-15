@@ -20,6 +20,13 @@
       <!-- Mode -->
       <section class="page" data-page="mode" id="page-mode">
         <div class="page__pad">
+          <div id="now-playing" class="now-playing-card" hidden>
+            <h2 class="now-playing-card__heading">Currently played</h2>
+            <p class="now-playing-card__title" id="np-title"></p>
+            <p class="now-playing-card__artist" id="np-artist"></p>
+            <p class="now-playing-card__album" id="np-album"></p>
+            <span class="now-playing-card__player" id="np-player"></span>
+          </div>
           <p id="mode-error" class="banner banner--error" hidden role="alert"></p>
           <div id="mode-buttons" class="mode-grid" role="group" aria-label="Playback mode"></div>
         </div>

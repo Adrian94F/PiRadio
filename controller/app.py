@@ -580,6 +580,55 @@ def bluetooth_status() -> dict[str, Any]:
     }
 
 
+def now_playing() -> dict[str, Any]:
+    """Query MPRIS2 metadata via playerctl (title, artist, album)."""
+    exe = shutil.which("playerctl")
+    if not exe:
+        return {"playing": False}
+    try:
+        status_proc = subprocess.run(
+            [exe, "status"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        status = (status_proc.stdout or "").strip().lower()
+        if status not in ("playing", "paused"):
+            return {"playing": False}
+
+        meta_proc = subprocess.run(
+            [exe, "metadata", "--format",
+             "{{artist}}\n{{title}}\n{{album}}\n{{playerName}}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        lines = (meta_proc.stdout or "").splitlines()
+        artist = lines[0].strip() if len(lines) > 0 else ""
+        title = lines[1].strip() if len(lines) > 1 else ""
+        album = lines[2].strip() if len(lines) > 2 else ""
+        player = lines[3].strip() if len(lines) > 3 else ""
+
+        if not title and not artist:
+            return {"playing": False}
+
+        return {
+            "playing": True,
+            "status": status,
+            "title": title or None,
+            "artist": artist or None,
+            "album": album or None,
+            "player": player or None,
+        }
+    except (subprocess.TimeoutExpired, OSError):
+        return {"playing": False}
+
+
+@app.get("/api/now-playing")
+def get_now_playing() -> dict[str, Any]:
+    return now_playing()
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}

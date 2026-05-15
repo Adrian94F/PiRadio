@@ -33,10 +33,16 @@
   const btAdapterOff = document.getElementById("bt-adapter-off");
   const btAdapterOffMsg = document.getElementById("bt-adapter-off-msg");
   const btEnable = document.getElementById("bt-enable");
+  const nowPlayingCard = document.getElementById("now-playing");
+  const npTitle = document.getElementById("np-title");
+  const npArtist = document.getElementById("np-artist");
+  const npAlbum = document.getElementById("np-album");
+  const npPlayer = document.getElementById("np-player");
 
   let config = { modes: {}, dashboard_units: [] };
   let statusTimer = null;
   let logWs = null;
+  let npTimer = null;
 
   function setAudioError(msg) {
     if (!msg) {
@@ -128,6 +134,30 @@
       throw new Error(detail);
     }
     return r.json();
+  }
+
+  function renderNowPlaying(data) {
+    if (!nowPlayingCard) return;
+    if (!data || !data.playing) {
+      nowPlayingCard.hidden = true;
+      return;
+    }
+    nowPlayingCard.hidden = false;
+    npTitle.textContent = data.title || "";
+    npArtist.textContent = data.artist || "";
+    npAlbum.textContent = data.album || "";
+    npPlayer.textContent = data.player || "";
+    npAlbum.hidden = !data.album;
+    npPlayer.hidden = !data.player;
+  }
+
+  async function refreshNowPlaying() {
+    try {
+      const data = await fetchJson("/api/now-playing");
+      renderNowPlaying(data);
+    } catch {
+      renderNowPlaying(null);
+    }
   }
 
   function highlightMode(mode) {
@@ -524,9 +554,14 @@
 
   loadConfig()
     .then(() => refreshStatus())
+    .then(() => refreshNowPlaying())
     .catch((e) => setModeError(String(e.message || e)));
 
   statusTimer = window.setInterval(() => {
     refreshStatus().catch(() => {});
+  }, 3000);
+
+  npTimer = window.setInterval(() => {
+    refreshNowPlaying();
   }, 3000);
 })();
