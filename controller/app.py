@@ -374,11 +374,14 @@ def restart_active_audio_sinks() -> list[str]:
 
 
 def write_default_asound(card: int, device: int) -> None:
-    """Write /etc/asound.conf. Uses direct hw access (exclusive) or dmix depending on auto_mode."""
-    auto = read_auto_mode()
-    if auto:
-        # Auto mode: multiple services may run — need dmix for shared access
-        content = f"""{ASOUND_MARKER} — default PCM for Pi Audio Controller (shared/dmix)
+    """Write /etc/asound.conf with dmix for buffering.
+
+    The Sound Blaster Play! 3 negotiates period_size=221 (~5ms) on hw: access.
+    The shared dwc_otg USB bus cannot guarantee 5ms delivery, causing XRUNs.
+    dmix decouples app writes (large periods) from hardware timing, preventing XRUNs.
+    Always use dmix regardless of auto/exclusive mode.
+    """
+    content = f"""{ASOUND_MARKER} — default PCM for Pi Audio Controller
 
 pcm.!default {{
     type plug
@@ -395,19 +398,6 @@ pcm.dmixer {{
         period_size 4096
         buffer_size 16384
     }}
-}}
-ctl.!default {{
-    type hw
-    card {card}
-}}
-"""
-    else:
-        # Exclusive mode: only one service at a time — direct hw access, no XRUN from dmix
-        content = f"""{ASOUND_MARKER} — default PCM for Pi Audio Controller (exclusive)
-
-pcm.!default {{
-    type plug
-    slave.pcm "hw:{card},{device}"
 }}
 ctl.!default {{
     type hw
@@ -650,17 +640,6 @@ def get_auto_mode() -> dict[str, bool]:
 def post_auto_mode(body: dict[str, Any]) -> dict[str, Any]:
     enabled = bool(body.get("enabled", False))
     write_auto_mode(enabled)
-    # When switching to exclusive mode, rewrite asound.conf if we know the current output
-    if not enabled:
-        state = audio_status()
-        if state.get("card") is not None and state.get("device") is not None:
-            write_default_asound(int(state["card"]), int(state["device"]))
-            restart_active_audio_sinks()
-    elif enabled:
-        state = audio_status()
-        if state.get("card") is not None and state.get("device") is not None:
-            write_default_asound(int(state["card"]), int(state["device"]))
-            restart_active_audio_sinks()
     return {"ok": True, "enabled": enabled}
 
 
