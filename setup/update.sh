@@ -103,6 +103,18 @@ if [[ ! -f "${CONFIG_DIR}/softwarebuttond.yaml" ]]; then
   log "Installed default ${CONFIG_DIR}/softwarebuttond.yaml."
 fi
 
+# Ensure Mosquitto allows LAN connections
+mkdir -p /etc/mosquitto/conf.d
+if [[ ! -f /etc/mosquitto/conf.d/pi-audio.conf ]]; then
+  cat > /etc/mosquitto/conf.d/pi-audio.conf <<'EOF'
+# Allow LAN connections for Home Assistant MQTT Discovery.
+listener 1883
+allow_anonymous true
+EOF
+  log "Configured Mosquitto for LAN access."
+  systemctl restart mosquitto.service 2>/dev/null || true
+fi
+
 log "Refreshing systemd units…"
 install -m 0644 "${REPO_ROOT}/systemd/pi-bluetooth-agent.service" /etc/systemd/system/pi-bluetooth-agent.service
 install -m 0644 "${REPO_ROOT}/systemd/pi-audio-controller.service" /etc/systemd/system/pi-audio-controller.service

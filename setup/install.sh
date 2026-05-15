@@ -86,6 +86,15 @@ fi
 install -m 0644 "${REPO_ROOT}/systemd/softwarebuttond.service" /etc/systemd/system/softwarebuttond.service
 
 log "Enabling Mosquitto MQTT broker…"
+mkdir -p /etc/mosquitto/conf.d
+if [[ ! -f /etc/mosquitto/conf.d/pi-audio.conf ]]; then
+  cat > /etc/mosquitto/conf.d/pi-audio.conf <<'EOF'
+# Allow LAN connections for Home Assistant MQTT Discovery.
+listener 1883
+allow_anonymous true
+EOF
+  log "Configured Mosquitto for LAN access (/etc/mosquitto/conf.d/pi-audio.conf)."
+fi
 systemctl enable mosquitto.service
 systemctl restart mosquitto.service
 
