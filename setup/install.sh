@@ -69,7 +69,25 @@ fi
 log "Installing Bluetooth pairing agent (required for phone pairing)…"
 mkdir -p "${INSTALL_ROOT}/scripts"
 install -m 0644 "${REPO_ROOT}/scripts/bt-default-agent.expect" "${INSTALL_ROOT}/scripts/bt-default-agent.expect"
+install -m 0755 "${REPO_ROOT}/scripts/spotify-onevent.sh" "${INSTALL_ROOT}/scripts/spotify-onevent.sh"
 install -m 0644 "${REPO_ROOT}/systemd/pi-bluetooth-agent.service" /etc/systemd/system/pi-bluetooth-agent.service
+
+# Configure raspotify to call our onevent script for playback detection
+RASPOTIFY_CONF="/etc/raspotify/conf"
+if [[ -f "${RASPOTIFY_CONF}" ]]; then
+  if ! grep -q "^LIBRESPOT_ONEVENT=" "${RASPOTIFY_CONF}"; then
+    log "Configuring raspotify --onevent for playback detection…"
+    echo "" >> "${RASPOTIFY_CONF}"
+    echo "# Pi Audio Controller: report playback state for Home Assistant" >> "${RASPOTIFY_CONF}"
+    echo "LIBRESPOT_ONEVENT=\"${INSTALL_ROOT}/scripts/spotify-onevent.sh\"" >> "${RASPOTIFY_CONF}"
+  fi
+fi
+
+# Allow raspotify (ProtectSystem=strict) to write playback state file
+mkdir -p /etc/systemd/system/raspotify.service.d
+install -m 0644 "${REPO_ROOT}/systemd/raspotify-override.conf" /etc/systemd/system/raspotify.service.d/pi-audio.conf
+systemctl daemon-reload
+systemctl restart raspotify.service 2>/dev/null || true
 
 log "Installing softwarebuttond (D-Bus → MQTT bridge for Home Assistant)…"
 install -m 0755 "${REPO_ROOT}/softwarebuttond/softwarebuttond.py" "${INSTALL_ROOT}/softwarebuttond.py"

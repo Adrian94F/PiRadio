@@ -61,10 +61,26 @@ install -m 0644 "${REPO_ROOT}/controller/app.py" "${INSTALL_ROOT}/app.py"
 install -m 0644 "${REPO_ROOT}/controller/requirements.txt" "${INSTALL_ROOT}/requirements.txt"
 cp -a "${REPO_ROOT}/controller/static/." "${INSTALL_ROOT}/static/"
 install -m 0644 "${REPO_ROOT}/scripts/bt-default-agent.expect" "${INSTALL_ROOT}/scripts/bt-default-agent.expect"
+install -m 0755 "${REPO_ROOT}/scripts/spotify-onevent.sh" "${INSTALL_ROOT}/scripts/spotify-onevent.sh"
 
 log "Deploying softwarebuttond…"
 install -m 0755 "${REPO_ROOT}/softwarebuttond/softwarebuttond.py" "${INSTALL_ROOT}/softwarebuttond.py"
 install -m 0644 "${REPO_ROOT}/softwarebuttond/requirements.txt" "${INSTALL_ROOT}/requirements-softwarebuttond.txt"
+
+# Ensure raspotify uses onevent for playback state detection
+RASPOTIFY_CONF="/etc/raspotify/conf"
+if [[ -f "${RASPOTIFY_CONF}" ]]; then
+  if ! grep -q "^LIBRESPOT_ONEVENT=" "${RASPOTIFY_CONF}"; then
+    log "Configuring raspotify --onevent for playback detection…"
+    echo "" >> "${RASPOTIFY_CONF}"
+    echo "# Pi Audio Controller: report playback state for Home Assistant" >> "${RASPOTIFY_CONF}"
+    echo "LIBRESPOT_ONEVENT=\"${INSTALL_ROOT}/scripts/spotify-onevent.sh\"" >> "${RASPOTIFY_CONF}"
+  fi
+fi
+
+# Allow raspotify (ProtectSystem=strict) to write playback state file
+mkdir -p /etc/systemd/system/raspotify.service.d
+install -m 0644 "${REPO_ROOT}/systemd/raspotify-override.conf" /etc/systemd/system/raspotify.service.d/pi-audio.conf
 
 if [[ ! -d "${INSTALL_ROOT}/venv" ]]; then
   log "No venv at ${INSTALL_ROOT}/venv — creating…"
