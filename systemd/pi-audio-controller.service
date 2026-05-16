@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 Environment=PI_AUDIO_CONFIG=/etc/pi-audio-controller
 WorkingDirectory=/opt/pi-audio-controller
-ExecStart=/opt/pi-audio-controller/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8765
+ExecStart=/opt/pi-audio-controller/venv/bin/uvicorn controller.app:app --host 0.0.0.0 --port 8765
 Restart=on-failure
 RestartSec=3
 

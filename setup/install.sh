@@ -46,10 +46,12 @@ if ! dpkg -l raspotify &>/dev/null; then
 fi
 
 log "Installing app to ${INSTALL_ROOT}…"
-mkdir -p "${INSTALL_ROOT}/static"
-install -m 0644 "${REPO_ROOT}/controller/app.py" "${INSTALL_ROOT}/app.py"
+mkdir -p "${INSTALL_ROOT}/controller/static"
+for f in "${REPO_ROOT}"/controller/*.py; do
+  install -m 0644 "$f" "${INSTALL_ROOT}/controller/$(basename "$f")"
+done
 install -m 0644 "${REPO_ROOT}/controller/requirements.txt" "${INSTALL_ROOT}/requirements.txt"
-cp -a "${REPO_ROOT}/controller/static/." "${INSTALL_ROOT}/static/"
+cp -a "${REPO_ROOT}/controller/static/." "${INSTALL_ROOT}/controller/static/"
 
 if [[ ! -d "${INSTALL_ROOT}/venv" ]]; then
   python3 -m venv "${INSTALL_ROOT}/venv"
