@@ -7,7 +7,7 @@ Wants=network-online.target mosquitto.service
 Type=simple
 Environment=LOG_LEVEL=INFO
 WorkingDirectory=/opt/pi-audio-controller
-ExecStart=/opt/pi-audio-controller/venv-piradio-ha/bin/python3 /opt/pi-audio-controller/piradio-ha.py
+ExecStart=/opt/pi-audio-controller/venv-piradio-ha/bin/python3 -m ha_integration
 Restart=on-failure
 RestartSec=5
 

@@ -92,13 +92,15 @@ systemctl daemon-reload
 systemctl restart raspotify.service 2>/dev/null || true
 
 log "Installing PiRadio HA integration (MQTT bridge for Home Assistant)…"
-install -m 0755 "${REPO_ROOT}/ha-integration/piradio-ha.py" "${INSTALL_ROOT}/piradio-ha.py"
-install -m 0644 "${REPO_ROOT}/ha-integration/requirements.txt" "${INSTALL_ROOT}/requirements-piradio-ha.txt"
+mkdir -p "${INSTALL_ROOT}/ha_integration"
+for f in "${REPO_ROOT}"/ha-integration/*.py; do
+  install -m 0644 "$f" "${INSTALL_ROOT}/ha_integration/$(basename "$f")"
+done
 if [[ ! -d "${INSTALL_ROOT}/venv-piradio-ha" ]]; then
   python3 -m venv "${INSTALL_ROOT}/venv-piradio-ha"
 fi
 "${INSTALL_ROOT}/venv-piradio-ha/bin/pip" install --upgrade pip -q
-"${INSTALL_ROOT}/venv-piradio-ha/bin/pip" install -r "${INSTALL_ROOT}/requirements-piradio-ha.txt"
+"${INSTALL_ROOT}/venv-piradio-ha/bin/pip" install paho-mqtt PyYAML dbus-next asyncinotify
 if [[ ! -f "${CONFIG_DIR}/piradio-ha.yaml" ]]; then
   install -m 0644 "${REPO_ROOT}/config/piradio-ha.yaml" "${CONFIG_DIR}/piradio-ha.yaml"
   log "Installed default ${CONFIG_DIR}/piradio-ha.yaml."
