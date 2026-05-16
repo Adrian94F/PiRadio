@@ -63,9 +63,9 @@ cp -a "${REPO_ROOT}/controller/static/." "${INSTALL_ROOT}/static/"
 install -m 0644 "${REPO_ROOT}/scripts/bt-default-agent.expect" "${INSTALL_ROOT}/scripts/bt-default-agent.expect"
 install -m 0755 "${REPO_ROOT}/scripts/spotify-onevent.sh" "${INSTALL_ROOT}/scripts/spotify-onevent.sh"
 
-log "Deploying softwarebuttond…"
-install -m 0755 "${REPO_ROOT}/softwarebuttond/softwarebuttond.py" "${INSTALL_ROOT}/softwarebuttond.py"
-install -m 0644 "${REPO_ROOT}/softwarebuttond/requirements.txt" "${INSTALL_ROOT}/requirements-softwarebuttond.txt"
+log "Deploying PiRadio HA integration…"
+install -m 0755 "${REPO_ROOT}/ha-integration/piradio-ha.py" "${INSTALL_ROOT}/piradio-ha.py"
+install -m 0644 "${REPO_ROOT}/ha-integration/requirements.txt" "${INSTALL_ROOT}/requirements-piradio-ha.txt"
 
 # Ensure raspotify uses onevent for playback state detection
 RASPOTIFY_CONF="/etc/raspotify/conf"
@@ -94,16 +94,16 @@ else
   "${INSTALL_ROOT}/venv/bin/pip" install -r "${INSTALL_ROOT}/requirements.txt" -q
 fi
 
-# softwarebuttond venv
-if [[ ! -d "${INSTALL_ROOT}/venv-softwarebuttond" ]]; then
-  log "Creating venv for softwarebuttond…"
-  python3 -m venv "${INSTALL_ROOT}/venv-softwarebuttond"
+# piradio-ha venv
+if [[ ! -d "${INSTALL_ROOT}/venv-piradio-ha" ]]; then
+  log "Creating venv for piradio-ha…"
+  python3 -m venv "${INSTALL_ROOT}/venv-piradio-ha"
 fi
-"${INSTALL_ROOT}/venv-softwarebuttond/bin/pip" install --upgrade pip -q
+"${INSTALL_ROOT}/venv-piradio-ha/bin/pip" install --upgrade pip -q
 if [[ "${DO_DEPS}" -eq 1 ]]; then
-  "${INSTALL_ROOT}/venv-softwarebuttond/bin/pip" install -r "${INSTALL_ROOT}/requirements-softwarebuttond.txt" --upgrade
+  "${INSTALL_ROOT}/venv-piradio-ha/bin/pip" install -r "${INSTALL_ROOT}/requirements-piradio-ha.txt" --upgrade
 else
-  "${INSTALL_ROOT}/venv-softwarebuttond/bin/pip" install -r "${INSTALL_ROOT}/requirements-softwarebuttond.txt" -q
+  "${INSTALL_ROOT}/venv-piradio-ha/bin/pip" install -r "${INSTALL_ROOT}/requirements-piradio-ha.txt" -q
 fi
 
 mkdir -p "${CONFIG_DIR}"
@@ -114,9 +114,9 @@ if [[ ! -f "${CONFIG_DIR}/modes.yaml" ]]; then
 else
   log "Leaving existing ${CONFIG_DIR}/modes.yaml unchanged."
 fi
-if [[ ! -f "${CONFIG_DIR}/softwarebuttond.yaml" ]]; then
-  install -m 0644 "${REPO_ROOT}/config/softwarebuttond.yaml" "${CONFIG_DIR}/softwarebuttond.yaml"
-  log "Installed default ${CONFIG_DIR}/softwarebuttond.yaml."
+if [[ ! -f "${CONFIG_DIR}/piradio-ha.yaml" ]]; then
+  install -m 0644 "${REPO_ROOT}/config/piradio-ha.yaml" "${CONFIG_DIR}/piradio-ha.yaml"
+  log "Installed default ${CONFIG_DIR}/piradio-ha.yaml."
 fi
 
 # Ensure Mosquitto allows LAN connections
@@ -134,12 +134,12 @@ fi
 log "Refreshing systemd units…"
 install -m 0644 "${REPO_ROOT}/systemd/pi-bluetooth-agent.service" /etc/systemd/system/pi-bluetooth-agent.service
 install -m 0644 "${REPO_ROOT}/systemd/pi-audio-controller.service" /etc/systemd/system/pi-audio-controller.service
-install -m 0644 "${REPO_ROOT}/systemd/softwarebuttond.service" /etc/systemd/system/softwarebuttond.service
+install -m 0644 "${REPO_ROOT}/systemd/piradio-ha.service" /etc/systemd/system/piradio-ha.service
 systemctl daemon-reload
 systemctl enable pi-bluetooth-agent.service 2>/dev/null || true
 systemctl restart pi-bluetooth-agent.service 2>/dev/null || true
-systemctl enable softwarebuttond.service 2>/dev/null || true
-systemctl restart softwarebuttond.service 2>/dev/null || true
+systemctl enable piradio-ha.service 2>/dev/null || true
+systemctl restart piradio-ha.service 2>/dev/null || true
 systemctl restart pi-audio-controller.service
 
 if systemctl is-active --quiet pi-audio-controller.service; then

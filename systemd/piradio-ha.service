@@ -1,17 +1,17 @@
 [Unit]
-Description=softwarebuttond — D-Bus to MQTT bridge for Pi Audio Controller
-After=network-online.target bluetooth.service mosquitto.service dbus.service
+Description=PiRadio HA Integration — MQTT bridge for Home Assistant
+After=network-online.target bluetooth.service mosquitto.service dbus.service pi-audio-controller.service
 Wants=network-online.target mosquitto.service
 
 [Service]
 Type=simple
 Environment=LOG_LEVEL=INFO
 WorkingDirectory=/opt/pi-audio-controller
-ExecStart=/opt/pi-audio-controller/venv-softwarebuttond/bin/python3 /opt/pi-audio-controller/softwarebuttond.py
+ExecStart=/opt/pi-audio-controller/venv-piradio-ha/bin/python3 /opt/pi-audio-controller/piradio-ha.py
 Restart=on-failure
 RestartSec=5
 
-# Needs system D-Bus access for BlueZ and MPRIS signals.
+# Needs system D-Bus access for BlueZ and shairport-sync signals.
 User=root
 
 [Install]

@@ -86,20 +86,26 @@ PI_AUDIO_CONFIG=../config uvicorn app:app --reload --host 127.0.0.1 --port 8765
 
 The UI expects `systemctl` and `journalctl` (same as on the Pi).
 
-## Home Assistant integration (softwarebuttond)
+## Home Assistant integration (piradio-ha)
 
-An independent daemon **`softwarebuttond`** bridges D-Bus playback events to MQTT so Home Assistant discovers the Pi as an audio device automatically.
+An independent daemon **`piradio-ha`** bridges D-Bus playback events to MQTT so Home Assistant discovers the Pi as an audio device automatically. It also allows **mode switching** and **auto-mode toggle** directly from Home Assistant.
 
 ### Architecture
 
 ```
-                D-Bus
-   ┌─────────────────────────┐
-   │                         │
-Spotify ─┐                   │
-AirPlay ─┼──► softwarebuttond├──► MQTT ─► Home Assistant
-BT A2DP ─┘                   │
-   └─────────────────────────┘
+                D-Bus / Files
+   ┌──────────────────────────────┐
+   │                              │
+Spotify ─┐                        │         MQTT
+AirPlay ─┼──► piradio-ha ─────────┼──────►──────► Home Assistant
+BT A2DP ─┘        ▲               │         (Discovery)
+                   │               │
+         ◄─── command topics ◄─────┼──── HA select/switch
+   └──────────────────────────────┘
+              │
+              ▼
+    Pi Audio Controller API
+    (POST /api/mode/*, /api/auto-mode)
 ```
 
 ### What appears in Home Assistant (via MQTT Discovery)
@@ -111,12 +117,14 @@ BT A2DP ─┘                   │
 | `binary_sensor.bluetooth_playing` | binary_sensor | ON / OFF |
 | `binary_sensor.any_audio_playing` | binary_sensor | ON / OFF |
 | `sensor.active_audio_source` | sensor | spotify / airplay / bluetooth / idle |
+| `select.audio_mode` | select | airplay / spotify / bluetooth |
+| `switch.auto_mode` | switch | ON / OFF |
 
 ### Detection methods
 
 | Source | D-Bus interface | Property |
 |--------|----------------|----------|
-| Spotify (raspotify) | `org.mpris.MediaPlayer2.Player` | `PlaybackStatus` (Playing/Paused/Stopped) |
+| Spotify (raspotify) | File watch (`/var/lib/pi-audio-controller/spotify-playback-state`) | playing/paused/stopped |
 | AirPlay (shairport-sync) | `org.gnome.ShairportSync.RemoteControl` | `PlayerState` (0/1/2) |
 | Bluetooth A2DP | `org.bluez.MediaTransport1` | `State` (idle/pending/active) |
 
@@ -124,7 +132,7 @@ Falls back to TCP connection check (`ss`) if D-Bus is unavailable for a source.
 
 ### Configuration
 
-Edit `/etc/pi-audio-controller/softwarebuttond.yaml`:
+Edit `/etc/pi-audio-controller/piradio-ha.yaml`:
 
 ```yaml
 mqtt:
@@ -142,13 +150,13 @@ sudo apt install mosquitto mosquitto-clients
 sudo systemctl enable --now mosquitto
 
 # Daemon venv
-sudo python3 -m venv /opt/pi-audio-controller/venv-softwarebuttond
-sudo /opt/pi-audio-controller/venv-softwarebuttond/bin/pip install -r softwarebuttond/requirements.txt
-sudo cp softwarebuttond/softwarebuttond.py /opt/pi-audio-controller/
-sudo cp config/softwarebuttond.yaml /etc/pi-audio-controller/
-sudo cp systemd/softwarebuttond.service /etc/systemd/system/
+sudo python3 -m venv /opt/pi-audio-controller/venv-piradio-ha
+sudo /opt/pi-audio-controller/venv-piradio-ha/bin/pip install -r ha-integration/requirements.txt
+sudo cp ha-integration/piradio-ha.py /opt/pi-audio-controller/
+sudo cp config/piradio-ha.yaml /etc/pi-audio-controller/
+sudo cp systemd/piradio-ha.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now softwarebuttond
+sudo systemctl enable --now piradio-ha
 ```
 
 ### Home Assistant side
@@ -156,9 +164,11 @@ sudo systemctl enable --now softwarebuttond
 1. Add the **MQTT integration** in HA (Settings → Devices & Services → Add → MQTT).
 2. Point it at the Pi's IP (or `127.0.0.1` if HA runs on the same host), port 1883.
 3. Entities appear automatically via MQTT Discovery — no manual YAML needed.
+4. Use `select.audio_mode` to switch between airplay/spotify/bluetooth.
+5. Use `switch.auto_mode` to toggle automatic source-following mode.
 
 ### Logs
 
 ```bash
-journalctl -u softwarebuttond -f
+journalctl -u piradio-ha -f
 ```

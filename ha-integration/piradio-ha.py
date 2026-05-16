@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-softwarebuttond — D-Bus → MQTT bridge for Pi Audio Controller.
+piradio-ha — Home Assistant MQTT integration for Pi Audio Controller.
 
-Monitors playback state of Spotify (MPRIS2), AirPlay (shairport-sync D-Bus),
-and Bluetooth A2DP (BlueZ MediaTransport1) via D-Bus subscriptions on the
-system bus.  Publishes binary_sensor and sensor entities to Home Assistant
-via MQTT Discovery.
+Monitors playback state of Spotify, AirPlay (shairport-sync D-Bus),
+and Bluetooth A2DP (BlueZ MediaTransport1).  Publishes binary_sensor,
+sensor, select (mode), and switch (auto-mode) entities to Home Assistant
+via MQTT Discovery.  Subscribes to command topics to allow mode switching
+from HA.
 
-Event-driven with a periodic reconciliation fallback (for sources whose
-D-Bus interface may not be available).
+Event-driven with a periodic reconciliation fallback.
 """
 
 from __future__ import annotations
@@ -21,6 +21,8 @@ import signal
 import shutil
 import subprocess
 import sys
+import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import Any
 
@@ -40,10 +42,16 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 DEFAULT_CONFIG_PATHS = [
-    Path(os.environ.get("SOFTWAREBUTTOND_CONFIG", "")),
+    Path(os.environ.get("PIRADIO_HA_CONFIG", "")),
+    Path("/etc/pi-audio-controller/piradio-ha.yaml"),
+    # Legacy path
     Path("/etc/pi-audio-controller/softwarebuttond.yaml"),
-    Path(__file__).resolve().parent.parent / "config" / "softwarebuttond.yaml",
+    Path(__file__).resolve().parent.parent / "config" / "piradio-ha.yaml",
 ]
+
+CONTROLLER_URL = os.environ.get(
+    "PIRADIO_CONTROLLER_URL", "http://127.0.0.1:8765"
+)
 
 CURRENT_MODE_FILE = Path(
     os.environ.get(
@@ -60,7 +68,7 @@ SPOTIFY_STATE_FILE = Path(
 )
 
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-log = logging.getLogger("softwarebuttond")
+log = logging.getLogger("piradio-ha")
 
 
 def load_config() -> dict[str, Any]:
@@ -134,7 +142,7 @@ class MQTTPublisher:
         self._user = cfg.get("username")
         self._pass = cfg.get("password")
         self._client = mqtt.Client(
-            client_id="softwarebuttond",
+            client_id="piradio-ha",
             protocol=mqtt.MQTTv311,
         )
         if self._user:
@@ -143,10 +151,13 @@ class MQTTPublisher:
             f"{STATE_PREFIX}/status", "offline", qos=1, retain=True,
         )
         self._connected = False
+        self._on_mode_command: Any = None
+        self._on_auto_mode_command: Any = None
 
     def connect(self) -> None:
         self._client.on_connect = self._on_connect
         self._client.on_disconnect = self._on_disconnect
+        self._client.on_message = self._on_message
         self._client.connect_async(self._host, self._port)
         self._client.loop_start()
 
@@ -160,10 +171,26 @@ class MQTTPublisher:
         self._connected = True
         self._publish(f"{STATE_PREFIX}/status", "online", retain=True)
         self._send_discovery()
+        # Subscribe to command topics
+        client.subscribe(f"{STATE_PREFIX}/mode/set", qos=1)
+        client.subscribe(f"{STATE_PREFIX}/auto_mode/set", qos=1)
 
     def _on_disconnect(self, client: Any, userdata: Any, rc: int) -> None:
         log.warning("MQTT disconnected (rc=%d)", rc)
         self._connected = False
+
+    def _on_message(self, client: Any, userdata: Any, msg: mqtt.MQTTMessage) -> None:
+        """Handle incoming commands from Home Assistant."""
+        topic = msg.topic
+        payload = msg.payload.decode("utf-8", errors="replace").strip()
+        log.info("MQTT command: %s = %s", topic, payload)
+
+        if topic == f"{STATE_PREFIX}/mode/set":
+            if payload in VALID_MODES and self._on_mode_command:
+                self._on_mode_command(payload)
+        elif topic == f"{STATE_PREFIX}/auto_mode/set":
+            if payload in ("ON", "OFF") and self._on_auto_mode_command:
+                self._on_auto_mode_command(payload == "ON")
 
     def _publish(self, topic: str, payload: str, retain: bool = False) -> None:
         self._client.publish(topic, payload, qos=1, retain=retain)
@@ -203,6 +230,36 @@ class MQTTPublisher:
         }
         topic = f"{DISCOVERY_PREFIX}/sensor/pi_audio/source/config"
         self._publish(topic, json.dumps(config), retain=True)
+
+        # Select: mode switching
+        config = {
+            "name": "Audio Mode",
+            "unique_id": "pi_audio_mode",
+            "state_topic": f"{STATE_PREFIX}/mode/state",
+            "command_topic": f"{STATE_PREFIX}/mode/set",
+            "options": list(VALID_MODES),
+            "icon": "mdi:tune-variant",
+            "device": DEVICE_INFO,
+            **availability,
+        }
+        topic = f"{DISCOVERY_PREFIX}/select/pi_audio/mode/config"
+        self._publish(topic, json.dumps(config), retain=True)
+
+        # Switch: auto-mode
+        config = {
+            "name": "Auto Mode",
+            "unique_id": "pi_audio_auto_mode",
+            "state_topic": f"{STATE_PREFIX}/auto_mode/state",
+            "command_topic": f"{STATE_PREFIX}/auto_mode/set",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "icon": "mdi:auto-fix",
+            "device": DEVICE_INFO,
+            **availability,
+        }
+        topic = f"{DISCOVERY_PREFIX}/switch/pi_audio/auto_mode/config"
+        self._publish(topic, json.dumps(config), retain=True)
+
         log.info("MQTT Discovery configs published.")
 
     def publish_state(self, state: DaemonState) -> None:
@@ -219,6 +276,20 @@ class MQTTPublisher:
         self._publish(
             f"{STATE_PREFIX}/source/state",
             state.active_source,
+            retain=True,
+        )
+
+    def publish_mode(self, mode: str | None) -> None:
+        if not self._connected or not mode:
+            return
+        self._publish(f"{STATE_PREFIX}/mode/state", mode, retain=True)
+
+    def publish_auto_mode(self, enabled: bool) -> None:
+        if not self._connected:
+            return
+        self._publish(
+            f"{STATE_PREFIX}/auto_mode/state",
+            "ON" if enabled else "OFF",
             retain=True,
         )
 
@@ -639,19 +710,77 @@ def read_current_mode() -> str | None:
         return None
 
 
+AUTO_MODE_FILE = Path(
+    os.environ.get(
+        "PI_AUDIO_AUTO_MODE",
+        "/var/lib/pi-audio-controller/auto-mode",
+    )
+)
+
+VALID_MODES = ("airplay", "spotify", "bluetooth")
+
+
+def read_auto_mode() -> bool:
+    try:
+        return AUTO_MODE_FILE.read_text(encoding="utf-8").strip() == "1"
+    except OSError:
+        return False
+
+
+def call_controller(method: str, path: str, body: dict | None = None) -> dict | None:
+    """Call the Pi Audio Controller HTTP API (non-blocking-safe from thread)."""
+    url = f"{CONTROLLER_URL}{path}"
+    data = json.dumps(body).encode() if body else None
+    req = urllib.request.Request(
+        url, data=data, method=method,
+        headers={"Content-Type": "application/json"} if data else {},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read())
+    except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
+        log.error("Controller API %s %s failed: %s", method, path, e)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Main daemon
 # ---------------------------------------------------------------------------
 
-class SoftwareButtonDaemon:
+class PiRadioHADaemon:
     def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
         self._state = DaemonState()
         self._mqtt = MQTTPublisher(config.get("mqtt", {}))
+        self._mqtt._on_mode_command = self._handle_mode_command
+        self._mqtt._on_auto_mode_command = self._handle_auto_mode_command
         self._bus: MessageBus | None = None
         self._reconcile_interval: float = config.get("reconcile_interval", 10.0)
         self._running = False
         self._spotify_file_monitor: SpotifyFileMonitor | None = None
+        self._mode_watch_task: asyncio.Task | None = None
+        self._last_mode: str | None = None
+        self._last_auto_mode: bool | None = None
+
+    def _handle_mode_command(self, mode: str) -> None:
+        """Called from MQTT thread when HA sends a mode command."""
+        log.info("HA requested mode switch to: %s", mode)
+        result = call_controller("POST", f"/api/mode/{mode}")
+        if result and result.get("ok"):
+            log.info("Mode switched to %s", mode)
+            self._mqtt.publish_mode(mode)
+        else:
+            log.error("Failed to switch mode to %s", mode)
+
+    def _handle_auto_mode_command(self, enabled: bool) -> None:
+        """Called from MQTT thread when HA sends an auto-mode command."""
+        log.info("HA requested auto_mode=%s", enabled)
+        result = call_controller("POST", "/api/auto-mode", {"enabled": enabled})
+        if result and result.get("ok"):
+            log.info("Auto mode set to %s", enabled)
+            self._mqtt.publish_auto_mode(enabled)
+        else:
+            log.error("Failed to set auto_mode=%s", enabled)
 
     async def run(self) -> None:
         self._running = True
@@ -683,13 +812,45 @@ class SoftwareButtonDaemon:
             await bt.setup()
             log.info("D-Bus monitors active.")
 
+        # Start mode file watcher
+        if HAS_INOTIFY:
+            self._mode_watch_task = asyncio.ensure_future(self._watch_mode_file())
+
         # Initial publish
         self._publish_state()
+        self._publish_mode_and_auto()
 
         # Reconciliation loop
         while self._running:
             await asyncio.sleep(self._reconcile_interval)
             self._reconcile()
+
+    def _publish_mode_and_auto(self) -> None:
+        """Publish current mode and auto-mode state."""
+        mode = read_current_mode()
+        if mode and mode != self._last_mode:
+            self._last_mode = mode
+            self._mqtt.publish_mode(mode)
+        auto = read_auto_mode()
+        if auto != self._last_auto_mode:
+            self._last_auto_mode = auto
+            self._mqtt.publish_auto_mode(auto)
+
+    async def _watch_mode_file(self) -> None:
+        """Watch current-mode and auto-mode files for changes."""
+        parent = CURRENT_MODE_FILE.parent
+        parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with Inotify() as inotify:
+                inotify.add_watch(parent, InotifyMask.CLOSE_WRITE | InotifyMask.MOVED_TO)
+                async for event in inotify:
+                    name = str(event.name) if event.name else ""
+                    if name in (CURRENT_MODE_FILE.name, AUTO_MODE_FILE.name):
+                        self._publish_mode_and_auto()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.error("Mode file watch error: %s; relying on polling.", e)
 
     async def _add_match_rules(self) -> None:
         """Add D-Bus match rules so we receive relevant signals."""
@@ -738,6 +899,9 @@ class SoftwareButtonDaemon:
         if changed:
             self._publish_state()
 
+        # Always refresh mode/auto-mode (file may have changed without inotify)
+        self._publish_mode_and_auto()
+
     def _publish_state(self) -> None:
         log.debug(
             "State: spotify=%s airplay=%s bt=%s active=%s",
@@ -752,6 +916,8 @@ class SoftwareButtonDaemon:
         self._running = False
         if self._spotify_file_monitor:
             self._spotify_file_monitor.stop()
+        if self._mode_watch_task and not self._mode_watch_task.done():
+            self._mode_watch_task.cancel()
         self._mqtt.stop()
 
 
@@ -761,7 +927,7 @@ def main() -> None:
         format=LOG_FORMAT,
     )
     config = load_config()
-    daemon = SoftwareButtonDaemon(config)
+    daemon = PiRadioHADaemon(config)
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -781,7 +947,7 @@ def main() -> None:
     finally:
         daemon.stop()
         loop.close()
-    log.info("softwarebuttond stopped.")
+    log.info("piradio-ha stopped.")
 
 
 if __name__ == "__main__":

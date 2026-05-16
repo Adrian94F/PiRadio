@@ -89,19 +89,19 @@ install -m 0644 "${REPO_ROOT}/systemd/raspotify-override.conf" /etc/systemd/syst
 systemctl daemon-reload
 systemctl restart raspotify.service 2>/dev/null || true
 
-log "Installing softwarebuttond (D-Bus → MQTT bridge for Home Assistant)…"
-install -m 0755 "${REPO_ROOT}/softwarebuttond/softwarebuttond.py" "${INSTALL_ROOT}/softwarebuttond.py"
-install -m 0644 "${REPO_ROOT}/softwarebuttond/requirements.txt" "${INSTALL_ROOT}/requirements-softwarebuttond.txt"
-if [[ ! -d "${INSTALL_ROOT}/venv-softwarebuttond" ]]; then
-  python3 -m venv "${INSTALL_ROOT}/venv-softwarebuttond"
+log "Installing PiRadio HA integration (MQTT bridge for Home Assistant)…"
+install -m 0755 "${REPO_ROOT}/ha-integration/piradio-ha.py" "${INSTALL_ROOT}/piradio-ha.py"
+install -m 0644 "${REPO_ROOT}/ha-integration/requirements.txt" "${INSTALL_ROOT}/requirements-piradio-ha.txt"
+if [[ ! -d "${INSTALL_ROOT}/venv-piradio-ha" ]]; then
+  python3 -m venv "${INSTALL_ROOT}/venv-piradio-ha"
 fi
-"${INSTALL_ROOT}/venv-softwarebuttond/bin/pip" install --upgrade pip -q
-"${INSTALL_ROOT}/venv-softwarebuttond/bin/pip" install -r "${INSTALL_ROOT}/requirements-softwarebuttond.txt"
-if [[ ! -f "${CONFIG_DIR}/softwarebuttond.yaml" ]]; then
-  install -m 0644 "${REPO_ROOT}/config/softwarebuttond.yaml" "${CONFIG_DIR}/softwarebuttond.yaml"
-  log "Installed default ${CONFIG_DIR}/softwarebuttond.yaml."
+"${INSTALL_ROOT}/venv-piradio-ha/bin/pip" install --upgrade pip -q
+"${INSTALL_ROOT}/venv-piradio-ha/bin/pip" install -r "${INSTALL_ROOT}/requirements-piradio-ha.txt"
+if [[ ! -f "${CONFIG_DIR}/piradio-ha.yaml" ]]; then
+  install -m 0644 "${REPO_ROOT}/config/piradio-ha.yaml" "${CONFIG_DIR}/piradio-ha.yaml"
+  log "Installed default ${CONFIG_DIR}/piradio-ha.yaml."
 fi
-install -m 0644 "${REPO_ROOT}/systemd/softwarebuttond.service" /etc/systemd/system/softwarebuttond.service
+install -m 0644 "${REPO_ROOT}/systemd/piradio-ha.service" /etc/systemd/system/piradio-ha.service
 
 log "Enabling Mosquitto MQTT broker…"
 mkdir -p /etc/mosquitto/conf.d
@@ -123,8 +123,8 @@ systemctl enable pi-bluetooth-agent.service
 systemctl restart pi-bluetooth-agent.service
 systemctl enable pi-audio-controller.service
 systemctl restart pi-audio-controller.service
-systemctl enable softwarebuttond.service
-systemctl restart softwarebuttond.service
+systemctl enable piradio-ha.service
+systemctl restart piradio-ha.service
 
 HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
 log "Done. Open http://${HOST_IP:-<pi-ip>}:8765"

@@ -1,5 +1,5 @@
-# softwarebuttond — D-Bus → MQTT bridge configuration.
-# Installed to /etc/pi-audio-controller/softwarebuttond.yaml
+# PiRadio HA Integration — MQTT bridge configuration.
+# Installed to /etc/pi-audio-controller/piradio-ha.yaml
 
 mqtt:
   host: "127.0.0.1"
