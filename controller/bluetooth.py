@@ -124,6 +124,45 @@ def check_bt_audio_connected() -> bool:
     return bool(_parse_bt_device_lines(out))
 
 
+def check_bt_audio_playing() -> bool:
+    """True if any BlueZ MediaTransport1 is in 'active' state (audio streaming)."""
+    busctl = shutil.which("busctl")
+    if not busctl:
+        return check_bt_audio_connected()
+    try:
+        proc = subprocess.run(
+            [busctl, "tree", "--no-pager", "org.bluez"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if proc.returncode != 0:
+            return check_bt_audio_connected()
+        # Find transport object paths (e.g. /org/bluez/hci0/dev_.../fd0)
+        transport_paths = [
+            line.strip().lstrip("\u2514\u2500\u251c\u2502 /").rstrip()
+            for line in proc.stdout.splitlines()
+            if "/fd" in line
+        ]
+        for path in transport_paths:
+            # Normalize: ensure path starts with /
+            if not path.startswith("/"):
+                path = "/" + path
+            state_proc = subprocess.run(
+                [busctl, "get-property", "org.bluez", path,
+                 "org.bluez.MediaTransport1", "State"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            # Output looks like: s "active"
+            if state_proc.returncode == 0 and '"active"' in state_proc.stdout:
+                return True
+        return False
+    except (subprocess.TimeoutExpired, OSError):
+        return check_bt_audio_connected()
+
+
 def bluetooth_status() -> dict[str, Any]:
     if not shutil.which("bluetoothctl"):
         return {

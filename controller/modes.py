@@ -5,11 +5,12 @@ from __future__ import annotations
 import asyncio
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from .bluetooth import check_bt_audio_connected
+from .bluetooth import check_bt_audio_connected, check_bt_audio_playing
 from .config import AUTO_MODE_FILE, STATE_FILE, load_modes
 from .system import run_systemctl
 
@@ -95,6 +96,15 @@ def _check_process_connections(process_name: str) -> bool:
         return False
 
 
+def _check_state_file(path_str: str) -> bool:
+    """True if the state file exists and contains 'playing'."""
+    try:
+        text = Path(path_str).read_text(encoding="utf-8").strip()
+        return text == "playing"
+    except OSError:
+        return False
+
+
 def _is_mode_active(mode: str) -> bool:
     """Check if the given mode currently has an active stream / connection."""
     data = load_modes()
@@ -104,10 +114,15 @@ def _is_mode_active(mode: str) -> bool:
     detect = spec.get("detect")
     if not detect:
         return False
-    if detect.get("process"):
-        return _check_process_connections(detect["process"])
     if detect.get("bt_connected"):
-        return check_bt_audio_connected()
+        return check_bt_audio_playing()
+    # For process-based detection, require state_file to confirm playback
+    # if one is configured; fall back to TCP connection check otherwise.
+    if detect.get("process"):
+        state_file = detect.get("state_file")
+        if state_file:
+            return _check_state_file(state_file)
+        return _check_process_connections(detect["process"])
     return False
 
 

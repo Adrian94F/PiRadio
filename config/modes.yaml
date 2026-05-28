@@ -9,6 +9,7 @@ modes:
     description: "AirPlay 2 via shairport-sync"
     detect:
       process: shairport-sync
+      state_file: /var/lib/pi-audio-controller/shairport-playback-state
     start:
       - shairport-sync.service
     stop:
@@ -19,6 +20,7 @@ modes:
     description: "Spotify Connect via raspotify (librespot)"
     detect:
       process: librespot
+      state_file: /var/lib/pi-audio-controller/spotify-playback-state
     start:
       - raspotify.service
     stop:
