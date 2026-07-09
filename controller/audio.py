@@ -109,7 +109,7 @@ pcm.dmixer {{
         format S16_LE
         channels 2
         period_size 4096
-        buffer_size 16384
+        buffer_size 77824
     }}
 }}
 ctl.!default {{
