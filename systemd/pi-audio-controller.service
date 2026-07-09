@@ -1,5 +1,5 @@
 [Unit]
-Description=Pi Audio Controller (web UI for AirPlay / Spotify / Bluetooth modes)
+Description=Pi Audio Controller (web UI for AirPlay)
 After=network-online.target
 Wants=network-online.target
 

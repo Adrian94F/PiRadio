@@ -6,8 +6,6 @@ Configure modes in /etc/pi-audio-controller/modes.yaml (installed from config/mo
 
 from __future__ import annotations
 
-import asyncio
-from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI
@@ -15,29 +13,16 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .audio import audio_status, router as audio_router
-from .bluetooth import bluetooth_status, router as bluetooth_router
 from .config import STATIC_DIR, load_modes
 from .device_name import read_device_name, router as device_name_router
-from .modes import auto_mode_loop, read_auto_mode, read_last_mode_valid, router as modes_router
+from .modes import read_last_mode_valid, router as modes_router
 from .system import unit_active
 from .websocket import router as websocket_router
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    task = asyncio.create_task(auto_mode_loop())
-    yield
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
-
-
-app = FastAPI(title="Pi Audio Controller", lifespan=lifespan)
+app = FastAPI(title="Pi Audio Controller")
 
 app.include_router(audio_router)
-app.include_router(bluetooth_router)
 app.include_router(modes_router)
 app.include_router(device_name_router)
 app.include_router(websocket_router)
@@ -67,11 +52,9 @@ def get_status() -> dict[str, Any]:
     units = list(data.get("dashboard_units") or [])
     return {
         "mode": read_last_mode_valid(),
-        "auto_mode": read_auto_mode(),
         "device_name": read_device_name(),
         "units": {u: {"active": unit_active(u)} for u in units},
         "audio": audio_status(),
-        "bluetooth": bluetooth_status(),
     }
 
 

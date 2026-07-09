@@ -73,7 +73,7 @@ def _alsa_restart_units() -> list[str]:
     units = data.get("alsa_restart_units")
     if isinstance(units, list) and units:
         return [str(u) for u in units]
-    return ["shairport-sync.service", "raspotify.service", "bluealsa.service"]
+    return ["shairport-sync.service"]
 
 
 def restart_active_audio_sinks() -> list[str]:
@@ -90,27 +90,17 @@ def restart_active_audio_sinks() -> list[str]:
 
 
 def write_default_asound(card: int, device: int) -> None:
-    """Write /etc/asound.conf with dmix for buffering.
+    """Write /etc/asound.conf routing the default PCM straight to the hardware.
 
-    dmix decouples app writes (large periods) from hardware timing, preventing XRUNs.
+    Single source (AirPlay) owns the card, so no dmix software mixer is needed.
+    `plug` only converts rate/format/channels if the hardware can't take the
+    stream natively — otherwise it is transparent (effectively direct output).
     """
     content = f"""{ASOUND_MARKER} — default PCM for Pi Audio Controller
 
 pcm.!default {{
     type plug
-    slave.pcm "dmixer"
-}}
-pcm.dmixer {{
-    type dmix
-    ipc_key 1024
-    slave {{
-        pcm "hw:{card},{device}"
-        rate 44100
-        format S16_LE
-        channels 2
-        period_size 4096
-        buffer_size 77824
-    }}
+    slave.pcm "hw:{card},{device}"
 }}
 ctl.!default {{
     type hw

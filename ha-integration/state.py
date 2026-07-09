@@ -23,10 +23,8 @@ class DaemonState:
     """Aggregate playback state across all sources."""
 
     def __init__(self) -> None:
-        self.spotify = SourceState("spotify")
         self.airplay = SourceState("airplay")
-        self.bluetooth = SourceState("bluetooth")
-        self.sources = [self.spotify, self.airplay, self.bluetooth]
+        self.sources = [self.airplay]
 
     @property
     def any_playing(self) -> bool:

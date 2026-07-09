@@ -25,15 +25,7 @@ CURRENT_MODE_FILE = Path(
     os.environ.get("PI_AUDIO_STATE", "/var/lib/pi-audio-controller/current-mode")
 )
 
-SPOTIFY_STATE_FILE = Path(
-    os.environ.get("SPOTIFY_PLAYBACK_STATE", "/var/lib/pi-audio-controller/spotify-playback-state")
-)
-
-AUTO_MODE_FILE = Path(
-    os.environ.get("PI_AUDIO_AUTO_MODE", "/var/lib/pi-audio-controller/auto-mode")
-)
-
-VALID_MODES = ("airplay", "spotify", "bluetooth")
+VALID_MODES = ("airplay",)
 
 
 def load_config() -> dict[str, Any]:

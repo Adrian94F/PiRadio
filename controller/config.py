@@ -25,21 +25,14 @@ AUDIO_STATE_FILE = Path(
 ASOUND_PATH = Path(os.environ.get("PI_AUDIO_ASOUND", "/etc/asound.conf"))
 ASOUND_MARKER = "# Managed by pi-audio-controller"
 
-AUTO_MODE_FILE = Path(
-    os.environ.get("PI_AUDIO_AUTO_MODE", "/var/lib/pi-audio-controller/auto-mode")
-)
-
 DEVICE_NAME_FILE = Path(
     os.environ.get("PI_AUDIO_DEVICE_NAME", "/var/lib/pi-audio-controller/device-name")
 )
 
 SHAIRPORT_CONF = Path("/etc/shairport-sync.conf")
-RASPOTIFY_CONF = Path("/etc/raspotify/conf")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 APLAY_LINE = re.compile(r"^card\s+(\d+):\s*(.+?),\s*device\s+(\d+):\s*(.+)$")
-BT_CONTROLLER = re.compile(r"^Controller\s+([0-9A-Fa-f:]+)", re.I)
-BT_DEVICE_LINE = re.compile(r"^Device\s+([0-9A-Fa-f:]{17})\s+(.*)$")
 
 
 def _config_path(name: str) -> Path:

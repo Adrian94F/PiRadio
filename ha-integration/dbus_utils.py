@@ -7,11 +7,7 @@ from typing import Any
 from dbus_next.aio import MessageBus
 from dbus_next import Message, MessageType, Variant
 
-MPRIS_IFACE = "org.mpris.MediaPlayer2.Player"
-MPRIS_PATH = "/org/mpris/MediaPlayer2"
 PROPERTIES_IFACE = "org.freedesktop.DBus.Properties"
-BLUEZ_SERVICE = "org.bluez"
-BLUEZ_TRANSPORT_IFACE = "org.bluez.MediaTransport1"
 OBJECT_MANAGER_IFACE = "org.freedesktop.DBus.ObjectManager"
 SHAIRPORT_SERVICE = "org.gnome.ShairportSync"
 SHAIRPORT_PATH = "/org/gnome/ShairportSync"

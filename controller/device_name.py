@@ -1,16 +1,14 @@
-"""Unified device name — sets Bluetooth alias, shairport-sync, and raspotify names."""
+"""Unified device name — sets the shairport-sync (AirPlay) name."""
 
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from .config import DEVICE_NAME_FILE, RASPOTIFY_CONF, SHAIRPORT_CONF
+from .config import DEVICE_NAME_FILE, SHAIRPORT_CONF
 from .system import run_systemctl, unit_active
 
 router = APIRouter(prefix="/api", tags=["device-name"])
@@ -40,38 +38,9 @@ def _set_shairport_name(name: str) -> None:
         SHAIRPORT_CONF.write_text(new_text, encoding="utf-8")
 
 
-def _set_raspotify_name(name: str) -> None:
-    """Set LIBRESPOT_NAME in /etc/raspotify/conf."""
-    if not RASPOTIFY_CONF.is_file():
-        return
-    text = RASPOTIFY_CONF.read_text(encoding="utf-8")
-    new_line = f'LIBRESPOT_NAME="{name}"'
-    if re.search(r'^\s*LIBRESPOT_NAME\s*=', text, re.M):
-        new_text = re.sub(r'^\s*LIBRESPOT_NAME\s*=.*$', new_line, text, count=1, flags=re.M)
-    elif re.search(r'^\s*#\s*LIBRESPOT_NAME\s*=', text, re.M):
-        new_text = re.sub(r'^(\s*#\s*LIBRESPOT_NAME\s*=.*)$', f'\\1\n{new_line}', text, count=1, flags=re.M)
-    else:
-        new_text = text.rstrip() + f'\n\n{new_line}\n'
-    if new_text != text:
-        RASPOTIFY_CONF.write_text(new_text, encoding="utf-8")
-
-
 def apply_device_name(name: str) -> dict[str, Any]:
-    """Set the unified device name across Bluetooth, AirPlay, and Spotify."""
+    """Set the device name for AirPlay (shairport-sync)."""
     errors: list[str] = []
-
-    if shutil.which("bluetoothctl"):
-        try:
-            proc = subprocess.run(
-                ["bluetoothctl", "system-alias", name],
-                capture_output=True,
-                text=True,
-                timeout=15,
-            )
-            if proc.returncode != 0:
-                errors.append(f"bluetooth: {(proc.stderr or proc.stdout or 'failed')[:200]}")
-        except Exception as e:
-            errors.append(f"bluetooth: {e}")
 
     try:
         _set_shairport_name(name)
@@ -79,13 +48,6 @@ def apply_device_name(name: str) -> dict[str, Any]:
             run_systemctl(["restart", "shairport-sync.service"])
     except Exception as e:
         errors.append(f"shairport: {e}")
-
-    try:
-        _set_raspotify_name(name)
-        if unit_active("raspotify.service") == "active":
-            run_systemctl(["restart", "raspotify.service"])
-    except Exception as e:
-        errors.append(f"raspotify: {e}")
 
     try:
         DEVICE_NAME_FILE.parent.mkdir(parents=True, exist_ok=True)

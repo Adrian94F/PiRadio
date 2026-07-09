@@ -35,7 +35,6 @@ class MQTTPublisher:
         self._client.will_set(f"{STATE_PREFIX}/status", "offline", qos=1, retain=True)
         self._connected = False
         self._on_mode_command: Any = None
-        self._on_auto_mode_command: Any = None
 
     def connect(self) -> None:
         self._client.on_connect = self._on_connect
@@ -55,7 +54,6 @@ class MQTTPublisher:
         self._publish(f"{STATE_PREFIX}/status", "online", retain=True)
         self._send_discovery()
         client.subscribe(f"{STATE_PREFIX}/mode/set", qos=1)
-        client.subscribe(f"{STATE_PREFIX}/auto_mode/set", qos=1)
 
     def _on_disconnect(self, client: Any, userdata: Any, rc: int) -> None:
         log.warning("MQTT disconnected (rc=%d)", rc)
@@ -69,9 +67,6 @@ class MQTTPublisher:
         if topic == f"{STATE_PREFIX}/mode/set":
             if payload in VALID_MODES and self._on_mode_command:
                 self._on_mode_command(payload)
-        elif topic == f"{STATE_PREFIX}/auto_mode/set":
-            if payload in ("ON", "OFF") and self._on_auto_mode_command:
-                self._on_auto_mode_command(payload == "ON")
 
     def _publish(self, topic: str, payload: str, retain: bool = False) -> None:
         self._client.publish(topic, payload, qos=1, retain=retain)
@@ -84,11 +79,9 @@ class MQTTPublisher:
             "payload_not_available": "offline",
         }
 
-        for source in ("spotify", "airplay", "bluetooth", "any"):
+        for source in ("airplay", "any"):
             nice = {
-                "spotify": "Spotify",
                 "airplay": "AirPlay",
-                "bluetooth": "Bluetooth",
                 "any": "Any Audio",
             }[source]
             config = {
@@ -136,24 +129,6 @@ class MQTTPublisher:
             retain=True,
         )
 
-        # Switch: auto-mode
-        config = {
-            "name": "Auto Mode",
-            "unique_id": "pi_audio_auto_mode",
-            "state_topic": f"{STATE_PREFIX}/auto_mode/state",
-            "command_topic": f"{STATE_PREFIX}/auto_mode/set",
-            "payload_on": "ON",
-            "payload_off": "OFF",
-            "icon": "mdi:auto-fix",
-            "device": DEVICE_INFO,
-            **availability,
-        }
-        self._publish(
-            f"{DISCOVERY_PREFIX}/switch/pi_audio/auto_mode/config",
-            json.dumps(config),
-            retain=True,
-        )
-
         log.info("MQTT Discovery configs published.")
 
     def publish_state(self, state: DaemonState) -> None:
@@ -168,8 +143,3 @@ class MQTTPublisher:
         if not self._connected or not mode:
             return
         self._publish(f"{STATE_PREFIX}/mode/state", mode, retain=True)
-
-    def publish_auto_mode(self, enabled: bool) -> None:
-        if not self._connected:
-            return
-        self._publish(f"{STATE_PREFIX}/auto_mode/state", "ON" if enabled else "OFF", retain=True)

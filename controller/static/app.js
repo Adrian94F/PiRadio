@@ -2,7 +2,7 @@
   const PAGE_SUBTITLE = {
     mode: "Choose playback mode",
     status: "Services & journal stream",
-    settings: "Audio & Bluetooth",
+    settings: "Audio output",
   };
 
   const ROUTES = ["mode", "status", "settings"];
@@ -22,19 +22,6 @@
   const deviceNameSave = document.getElementById("device-name-save");
   const deviceNameMeta = document.getElementById("device-name-meta");
   const deviceNameError = document.getElementById("device-name-error");
-  const btUnavailable = document.getElementById("bt-unavailable");
-  const btAdapterMeta = document.getElementById("bt-adapter-meta");
-  const btConnected = document.getElementById("bt-connected");
-  const btPaired = document.getElementById("bt-paired");
-  const btPairStart = document.getElementById("bt-pair-start");
-  const btPairStop = document.getElementById("bt-pair-stop");
-  const btPairHint = document.getElementById("bt-pair-hint");
-  const btError = document.getElementById("bt-error");
-  const btAdapterOff = document.getElementById("bt-adapter-off");
-  const btAdapterOffMsg = document.getElementById("bt-adapter-off-msg");
-  const btEnable = document.getElementById("bt-enable");
-  const autoModeToggle = document.getElementById("auto-mode-toggle");
-  const autoModeMeta = document.getElementById("auto-mode-meta");
   let config = { modes: {}, dashboard_units: [] };
   let statusTimer = null;
   let logWs = null;
@@ -57,16 +44,6 @@
     }
     deviceNameError.hidden = false;
     deviceNameError.textContent = msg;
-  }
-
-  function setBtError(msg) {
-    if (!msg) {
-      btError.hidden = true;
-      btError.textContent = "";
-      return;
-    }
-    btError.hidden = false;
-    btError.textContent = msg;
   }
 
   function setModeError(msg) {
@@ -223,121 +200,6 @@
     audioMeta.textContent = meta;
   }
 
-  function renderBluetooth(bt) {
-    if (!btUnavailable) return;
-
-    if (!bt || !bt.available) {
-      btUnavailable.hidden = false;
-      btUnavailable.textContent =
-        bt && bt.error ? bt.error : "Bluetooth stack unavailable.";
-      btPairStart.disabled = true;
-      btPairStop.disabled = true;
-      btConnected.innerHTML = "";
-      btPaired.innerHTML = "";
-      btAdapterMeta.textContent = "";
-      btPairHint.textContent = "";
-      if (btAdapterOff) btAdapterOff.hidden = true;
-      return;
-    }
-
-    btUnavailable.hidden = true;
-
-    const ad = bt.adapter || {};
-    const ready = bt.adapter_ready === true;
-
-    if (btAdapterOff && btAdapterOffMsg) {
-      if (!ready) {
-        btAdapterOff.hidden = false;
-        if (bt.rfkill_blocked) {
-          btAdapterOffMsg.textContent =
-            "Bluetooth is disabled (rfkill blocked—often after reboot or flight mode). Tap Enable to unblock and power the adapter.";
-        } else if (ad.powered === false) {
-          btAdapterOffMsg.textContent =
-            "The Bluetooth adapter is powered off. Tap Enable to turn it on.";
-        } else {
-          btAdapterOffMsg.textContent =
-            "Bluetooth is not ready yet. Tap Enable to unblock rfkill (if needed) and power on.";
-        }
-      } else {
-        btAdapterOff.hidden = true;
-      }
-    }
-
-    btPairStart.disabled = !ready;
-
-    const mac = ad.address || "";
-    let metaLine = "";
-    if (mac) {
-      metaLine = `Adapter ${mac}`;
-      if (!ready) {
-        metaLine += bt.rfkill_blocked ? " · blocked" : "";
-        metaLine += ad.powered === false ? " · powered off" : "";
-        metaLine += ad.powered == null ? " · state unknown" : "";
-      } else if (ad.pairable === false) {
-        metaLine += " · not pairable";
-      }
-    }
-    btAdapterMeta.textContent = metaLine;
-
-    const conn = bt.connected || [];
-    btConnected.innerHTML = "";
-    if (!conn.length) {
-      const empty = document.createElement("div");
-      empty.className = "bt-block bt-block--empty";
-      empty.textContent = "No device connected.";
-      btConnected.appendChild(empty);
-    } else {
-      conn.forEach((d) => {
-        const wrap = document.createElement("div");
-        wrap.className = "bt-block bt-connected-card";
-        const name = document.createElement("span");
-        name.className = "bt-list__name";
-        name.textContent = d.name || "(unknown)";
-        const macEl = document.createElement("span");
-        macEl.className = "bt-list__mac";
-        macEl.textContent = d.address || "";
-        wrap.appendChild(name);
-        wrap.appendChild(macEl);
-        btConnected.appendChild(wrap);
-      });
-    }
-
-    const paired = bt.paired || [];
-    btPaired.innerHTML = "";
-    if (!paired.length) {
-      const li = document.createElement("li");
-      li.className = "bt-block--empty";
-      li.style.border = "none";
-      li.style.background = "transparent";
-      li.style.padding = "0.5rem 0";
-      li.textContent = "No paired devices yet. Use pairing mode above.";
-      btPaired.appendChild(li);
-    } else {
-      paired.forEach((d) => {
-        const li = document.createElement("li");
-        const name = document.createElement("span");
-        name.className = "bt-list__name";
-        name.textContent = d.name || "(unknown)";
-        const macEl = document.createElement("span");
-        macEl.className = "bt-list__mac";
-        macEl.textContent = d.address || "";
-        li.appendChild(name);
-        li.appendChild(macEl);
-        btPaired.appendChild(li);
-      });
-    }
-
-    const disc = !!ad.discoverable;
-    btPairStop.disabled = !ready || !disc;
-    if (!ready) {
-      btPairHint.textContent = "Enable Bluetooth above, then use pairing.";
-    } else {
-      btPairHint.textContent = disc
-        ? "Adapter is visible — pair from your phone’s Bluetooth settings."
-        : "Tap to advertise this Pi so new devices can discover it.";
-    }
-  }
-
   function renderStatus(data) {
     statusGrid.innerHTML = "";
     const units = data.units || {};
@@ -348,14 +210,7 @@
       deviceNameInput.value = data.device_name || "";
     }
 
-    // Auto-mode toggle
-    if (autoModeToggle) {
-      autoModeToggle.checked = !!data.auto_mode;
-    }
-
     renderAudio(data.audio);
-
-    renderBluetooth(data.bluetooth);
 
     Object.keys(units).forEach((u) => {
       const row = document.createElement("div");
@@ -441,18 +296,6 @@
     startLogs();
   });
 
-  if (btEnable) {
-    btEnable.addEventListener("click", async () => {
-      setBtError("");
-      try {
-        await fetchJson("/api/bluetooth/enable", { method: "POST" });
-        await refreshStatus();
-      } catch (e) {
-        setBtError(String(e.message || e));
-      }
-    });
-  }
-
   deviceNameSave.addEventListener("click", async () => {
     const name = (deviceNameInput.value || "").trim();
     if (!name) {
@@ -466,60 +309,13 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
-      deviceNameMeta.textContent = `Saved as "${res.name}" for AirPlay, Spotify & Bluetooth.`;
+      deviceNameMeta.textContent = `Saved as "${res.name}" for AirPlay.`;
       if (res.errors) {
         setDeviceNameError(res.errors.join("; "));
       }
       await refreshStatus();
     } catch (e) {
       setDeviceNameError(String(e.message || e));
-    }
-  });
-
-  btPairStart.addEventListener("click", async () => {
-    setBtError("");
-    try {
-      await fetchJson("/api/bluetooth/discoverable", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: true, minutes: 5 }),
-      });
-      await refreshStatus();
-    } catch (e) {
-      setBtError(String(e.message || e));
-    }
-  });
-
-  btPairStop.addEventListener("click", async () => {
-    setBtError("");
-    try {
-      await fetchJson("/api/bluetooth/discoverable", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: false }),
-      });
-      await refreshStatus();
-    } catch (e) {
-      setBtError(String(e.message || e));
-    }
-  });
-
-  autoModeToggle.addEventListener("change", async () => {
-    const enabled = autoModeToggle.checked;
-    autoModeMeta.textContent = "Saving…";
-    try {
-      await fetchJson("/api/auto-mode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled }),
-      });
-      autoModeMeta.textContent = enabled
-        ? "Auto mode enabled — all services running, dmix active."
-        : "Exclusive mode — only active source runs, direct hardware access.";
-      await refreshStatus();
-    } catch (e) {
-      autoModeMeta.textContent = "Error: " + (e.message || e);
-      autoModeToggle.checked = !enabled;
     }
   });
 

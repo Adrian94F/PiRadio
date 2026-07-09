@@ -1,6 +1,6 @@
 [Unit]
 Description=PiRadio HA Integration — MQTT bridge for Home Assistant
-After=network-online.target bluetooth.service mosquitto.service dbus.service pi-audio-controller.service
+After=network-online.target mosquitto.service dbus.service pi-audio-controller.service
 Wants=network-online.target mosquitto.service
 
 [Service]
@@ -11,7 +11,7 @@ ExecStart=/opt/pi-audio-controller/venv-piradio-ha/bin/python3 -m ha_integration
 Restart=on-failure
 RestartSec=5
 
-# Needs system D-Bus access for BlueZ and shairport-sync signals.
+# Needs system D-Bus access for shairport-sync signals.
 User=root
 
 [Install]

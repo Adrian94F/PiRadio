@@ -50,7 +50,7 @@
           <div class="settings-card">
             <h2 class="settings-card__title">Device name</h2>
             <p class="settings-card__text">
-              Visible as the speaker name in AirPlay, Spotify Connect, and Bluetooth.
+              Visible as the speaker name in AirPlay.
             </p>
             <label class="field">
               <span class="field__label">Name</span>
@@ -59,41 +59,6 @@
             <button type="button" id="device-name-save" class="btn btn--primary btn--lg">Save name</button>
             <p id="device-name-meta" class="settings-meta"></p>
             <p id="device-name-error" class="banner banner--error" hidden role="alert"></p>
-          </div>
-
-          <div class="settings-card">
-            <h2 class="settings-card__title">Bluetooth</h2>
-            <p class="settings-card__text">
-              Start visibility to pair a new device; then connect from the phone.
-              Pairing needs the <strong>pi-bluetooth-agent</strong> service (installed by setup) — if pairing fails, see the project README.
-            </p>
-            <p id="bt-unavailable" class="banner banner--warn" hidden role="status"></p>
-
-            <div id="bt-adapter-off" class="bt-power-callout" hidden>
-              <p id="bt-adapter-off-msg" class="bt-power-callout__msg"></p>
-              <button type="button" id="bt-enable" class="btn btn--primary btn--lg">
-                Enable Bluetooth
-              </button>
-            </div>
-
-            <p id="bt-adapter-meta" class="settings-meta"></p>
-
-            <h3 class="settings-subhead">Connected now</h3>
-            <div id="bt-connected" class="bt-block"></div>
-
-            <h3 class="settings-subhead">Paired devices</h3>
-            <ul id="bt-paired" class="bt-list"></ul>
-
-            <div class="bt-actions">
-              <button type="button" id="bt-pair-start" class="btn btn--primary btn--lg">
-                Make discoverable for pairing (~5&nbsp;min)
-              </button>
-              <button type="button" id="bt-pair-stop" class="btn btn--secondary btn--lg" disabled>
-                Stop visibility
-              </button>
-            </div>
-            <p id="bt-pair-hint" class="settings-meta"></p>
-            <p id="bt-error" class="banner banner--error" hidden role="alert"></p>
           </div>
 
           <div class="settings-card">
@@ -108,19 +73,6 @@
             <button type="button" id="audio-apply" class="btn btn--primary btn--lg">Apply device</button>
             <p id="audio-meta" class="settings-meta"></p>
             <p id="audio-error" class="banner banner--error" hidden role="alert"></p>
-          </div>
-
-          <div class="settings-card">
-            <h2 class="settings-card__title">Mode switching</h2>
-            <p class="settings-card__text">
-              <strong>Exclusive</strong> (recommended): only one audio service runs at a time — eliminates audio dropouts.<br>
-              <strong>Auto</strong>: all services stay running and mode follows the active source (requires dmix, may cause dropouts).
-            </p>
-            <label class="toggle-field">
-              <input type="checkbox" id="auto-mode-toggle" class="toggle-field__input" />
-              <span class="toggle-field__label">Auto mode (all services always running)</span>
-            </label>
-            <p id="auto-mode-meta" class="settings-meta"></p>
           </div>
         </div>
       </section>

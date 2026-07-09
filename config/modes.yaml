@@ -1,8 +1,4 @@
 # Maps UI modes to systemd units that must be running vs stopped.
-# Adjust unit names to match your distro (e.g. bluealsa vs bluealsa@hci0).
-# Debian/Raspberry Pi OS: install APT package bluez-alsa-utils (daemon still uses bluealsa.service).
-# Do not use YAML 1.1 boolean words as unquoted keys (e.g. off/on/yes/no) — PyYAML turns them into
-# Python booleans and the mode name becomes "false" in JSON, which breaks the web UI.
 
 modes:
   airplay:
@@ -12,41 +8,12 @@ modes:
       state_file: /var/lib/pi-audio-controller/shairport-playback-state
     start:
       - shairport-sync.service
-    stop:
-      - raspotify.service
-      - bluealsa.service
-
-  spotify:
-    description: "Spotify Connect via raspotify (librespot)"
-    detect:
-      process: librespot
-      state_file: /var/lib/pi-audio-controller/spotify-playback-state
-    start:
-      - raspotify.service
-    stop:
-      - shairport-sync.service
-      - bluealsa.service
-
-  bluetooth:
-    description: "Bluetooth A2DP speaker (BlueALSA)"
-    detect:
-      bt_connected: true
-    start:
-      - bluetooth.service
-      - bluealsa.service
-    stop:
-      - shairport-sync.service
-      - raspotify.service
+    stop: []
 
 # After changing default ALSA device (web UI), restart these if active so sinks reopen ALSA.
 alsa_restart_units:
   - shairport-sync.service
-  - raspotify.service
-  - bluealsa.service
 
 # Units shown in the dashboard (status + logs), in display order.
 dashboard_units:
   - shairport-sync.service
-  - raspotify.service
-  - bluetooth.service
-  - bluealsa.service
