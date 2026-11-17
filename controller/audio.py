@@ -131,6 +131,10 @@ def set_shairport_default_output() -> None:
         flags=re.MULTILINE,
     )
     if updated != text:
+        backup = SHAIRPORT_CONF.with_name(
+            f"shairport-sync.conf.bak.pi-audio-{int(time.time())}"
+        )
+        shutil.copy2(SHAIRPORT_CONF, backup)
         SHAIRPORT_CONF.write_text(updated, encoding="utf-8")
 
 
