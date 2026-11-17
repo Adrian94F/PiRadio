@@ -11,6 +11,7 @@ sudo ./setup/install.sh
 ```
 
 The installer offers an interactive ALSA playback-device selection when run from a terminal. In non-interactive runs, the system's current default is left unchanged; you can select a device later in the web UI.
+It also asks for an initial volume from 0 to 100 (press Enter for 50). The volume is applied to the selected ALSA card when it exposes a supported mixer control.
 
 Then open `http://<pi-ip>:8765` on your LAN.
 

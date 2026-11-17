@@ -6,6 +6,7 @@ set -euo pipefail
 INSTALL_ROOT="${INSTALL_ROOT:-/opt/pi-audio-controller}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/pi-audio-controller}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AUDIO_CARD=""
 
 log() { printf '[pi-audio-controller] %s\n' "$*"; }
 
@@ -78,6 +79,7 @@ for line in sys.stdin:
   local audio_label="${selected#*$'\t'}"
   local card="${audio_id%%,*}"
   local device="${audio_id#*,}"
+  AUDIO_CARD="$card"
 
   if [[ -f /etc/asound.conf ]] && ! grep -qF '# Managed by pi-audio-controller' /etc/asound.conf; then
     cp -a /etc/asound.conf "/etc/asound.conf.bak.pi-audio-$(date +%s)"
@@ -114,6 +116,43 @@ PY
 }
 
 select_audio_output
+
+set_initial_volume() {
+  if [[ ! -r /dev/tty || ! -w /dev/tty ]]; then
+    log "No interactive terminal; skipping initial volume setup."
+    return
+  fi
+
+  local card="${AUDIO_CARD:-}"
+  if [[ -z "$card" && -f /etc/asound.conf ]]; then
+    card="$(sed -nE 's/.*hw:([0-9]+),[0-9]+.*/\1/p' /etc/asound.conf | sed -n '1p')"
+  fi
+  card="${card:-0}"
+
+  local volume
+  while true; do
+    printf 'Set initial audio volume [0-100, default 50]: ' > /dev/tty
+    read -r volume < /dev/tty
+    volume="${volume:-50}"
+    if [[ "$volume" =~ ^[0-9]{1,3}$ ]] && (( 10#$volume <= 100 )); then
+      volume=$((10#$volume))
+      break
+    fi
+    printf 'Enter a number from 0 to 100.\n' > /dev/tty
+  done
+
+  local control
+  for control in Speaker Master PCM Headphone Digital; do
+    if amixer -q -c "$card" sset "$control" "${volume}%" >/dev/null 2>&1; then
+      log "Initial volume set to ${volume}% using ALSA control '${control}' on card ${card}."
+      return
+    fi
+  done
+
+  log "Could not set volume: no supported ALSA mixer control found on card ${card}."
+}
+
+set_initial_volume
 
 log "Installing app to ${INSTALL_ROOT}…"
 mkdir -p "${INSTALL_ROOT}/controller/static"
