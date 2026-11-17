@@ -170,6 +170,8 @@ systemctl restart mosquitto.service
 log "Installing systemd units…"
 install -m 0644 "${REPO_ROOT}/systemd/pi-audio-controller.service" /etc/systemd/system/pi-audio-controller.service
 systemctl daemon-reload
+systemctl enable shairport-sync.service
+systemctl restart shairport-sync.service
 systemctl enable pi-audio-controller.service
 systemctl restart pi-audio-controller.service
 systemctl enable piradio-ha.service
