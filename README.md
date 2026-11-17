@@ -10,6 +10,8 @@ On the Pi, clone or copy this repo and run:
 sudo ./setup/install.sh
 ```
 
+The installer offers an interactive ALSA playback-device selection when run from a terminal. In non-interactive runs, the system's current default is left unchanged; you can select a device later in the web UI.
+
 Then open `http://<pi-ip>:8765` on your LAN.
 
 ## Update after `git pull`

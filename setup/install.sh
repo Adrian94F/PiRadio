@@ -25,6 +25,91 @@ apt-get install -y --no-install-recommends \
   mosquitto mosquitto-clients \
   curl ca-certificates
 
+select_audio_output() {
+  if [[ ! -r /dev/tty || ! -w /dev/tty ]]; then
+    log "No interactive terminal; keeping the system's current audio output."
+    return
+  fi
+
+  local -a outputs
+  mapfile -t outputs < <(
+    aplay -l 2>/dev/null | python3 -c '
+import re
+import sys
+
+pattern = re.compile(r"^card\s+(\d+):\s*(.+?),\s*device\s+(\d+):\s*(.+)$")
+for line in sys.stdin:
+    match = pattern.match(line.strip())
+    if match:
+        card, card_name, device, device_name = match.groups()
+        label = f"Card {card}: {card_name.strip()} — {device_name.strip()}"
+        print(f"{card},{device}\t{label}")
+'
+  )
+
+  if (( ${#outputs[@]} == 0 )); then
+    log "No ALSA playback devices found; keeping the system's current audio output."
+    return
+  fi
+
+  printf '\nAvailable audio output devices:\n' > /dev/tty
+  local i
+  for i in "${!outputs[@]}"; do
+    printf '  %d) %s\n' "$((i + 1))" "${outputs[$i]#*$'\t'}" > /dev/tty
+  done
+  printf '  0) Keep the system default\n' > /dev/tty
+
+  local choice
+  while true; do
+    printf 'Select audio output [0-%d]: ' "${#outputs[@]}" > /dev/tty
+    read -r choice < /dev/tty
+    if [[ "$choice" == "0" ]]; then
+      log "Keeping the system's current audio output."
+      return
+    fi
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#outputs[@]} )); then
+      break
+    fi
+    printf 'Invalid selection. Try again.\n' > /dev/tty
+  done
+
+  local selected="${outputs[$((choice - 1))]}"
+  local audio_id="${selected%%$'\t'*}"
+  local audio_label="${selected#*$'\t'}"
+  local card="${audio_id%%,*}"
+  local device="${audio_id#*,}"
+
+  if [[ -f /etc/asound.conf ]] && ! grep -qF '# Managed by pi-audio-controller' /etc/asound.conf; then
+    cp -a /etc/asound.conf "/etc/asound.conf.bak.pi-audio-$(date +%s)"
+  fi
+  cat > /etc/asound.conf <<EOF
+# Managed by pi-audio-controller — default PCM for Pi Audio Controller
+
+pcm.!default {
+    type plug
+    slave.pcm "hw:${card},${device}"
+}
+ctl.!default {
+    type hw
+    card ${card}
+}
+EOF
+
+  mkdir -p /var/lib/pi-audio-controller
+  python3 - "$audio_id" "$card" "$device" "$audio_label" <<'PY'
+import json
+import sys
+
+audio_id, card, device, label = sys.argv[1:]
+with open("/var/lib/pi-audio-controller/audio-output.json", "w", encoding="utf-8") as state_file:
+    json.dump({"id": audio_id, "card": int(card), "device": int(device), "label": label}, state_file, indent=2)
+    state_file.write("\n")
+PY
+  log "Selected audio output: ${audio_label}."
+}
+
+select_audio_output
+
 log "Installing app to ${INSTALL_ROOT}…"
 mkdir -p "${INSTALL_ROOT}/controller/static"
 for f in "${REPO_ROOT}"/controller/*.py; do
