@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -16,6 +17,7 @@ from .config import (
     ASOUND_MARKER,
     ASOUND_PATH,
     AUDIO_STATE_FILE,
+    SHAIRPORT_CONF,
     load_modes,
 )
 from .system import run_systemctl, unit_active
@@ -116,6 +118,22 @@ ctl.!default {{
     ASOUND_PATH.write_text(content, encoding="utf-8")
 
 
+def set_shairport_default_output() -> None:
+    """Make Shairport Sync use ALSA's selected default PCM."""
+    if not SHAIRPORT_CONF.is_file():
+        return
+    text = SHAIRPORT_CONF.read_text(encoding="utf-8")
+    updated = re.sub(
+        r'(^\s*output_device\s*=\s*)"[^"]*"',
+        r'\1"default"',
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if updated != text:
+        SHAIRPORT_CONF.write_text(updated, encoding="utf-8")
+
+
 def apply_audio_output(hw_id: str) -> dict[str, Any]:
     """Validate id against `aplay -l`, persist, write /etc/asound.conf, restart sinks."""
     outputs = list_alsa_outputs()
@@ -126,6 +144,7 @@ def apply_audio_output(hw_id: str) -> dict[str, Any]:
     card = int(valid["card"])
     device = int(valid["device"])
     write_default_asound(card, device)
+    set_shairport_default_output()
 
     AUDIO_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     AUDIO_STATE_FILE.write_text(

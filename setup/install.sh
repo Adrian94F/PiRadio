@@ -95,6 +95,11 @@ ctl.!default {
 }
 EOF
 
+  if [[ -f /etc/shairport-sync.conf ]] && ! grep -Eq '^[[:space:]]*output_device[[:space:]]*=[[:space:]]*"default"' /etc/shairport-sync.conf; then
+    cp -a /etc/shairport-sync.conf "/etc/shairport-sync.conf.bak.pi-audio-$(date +%s)"
+    sed -i -E 's/^([[:space:]]*output_device[[:space:]]*=[[:space:]]*)"[^"]*"/\1"default"/' /etc/shairport-sync.conf
+  fi
+
   mkdir -p /var/lib/pi-audio-controller
   python3 - "$audio_id" "$card" "$device" "$audio_label" <<'PY'
 import json
